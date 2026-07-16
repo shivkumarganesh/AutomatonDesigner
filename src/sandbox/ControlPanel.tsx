@@ -26,8 +26,8 @@ export function ControlPanel() {
         </button>
       </div>
       <p className="hint">
-        "Finished Toy" hides the drive train inside its box, like the real thing. "Mechanism" opens it up for engineering
-        validation.
+        "Finished Toy" mounts the mechanism in an open wooden box - the way a real crank automaton is built, gears and cams
+        proudly visible through the frame. "Mechanism" strips the box for a bare validation view.
       </p>
 
       <h2>Driver Input</h2>

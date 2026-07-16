@@ -42,7 +42,6 @@ function AssemblyContents() {
   const assembly = useAssemblyStore((s) => s.assembly);
   const solveResult = useAssemblyStore((s) => s.solveResult);
   const validation = useAssemblyStore((s) => s.validation);
-  const viewMode = useAssemblyStore((s) => s.viewMode);
 
   const highlightedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -56,9 +55,9 @@ function AssemblyContents() {
   return (
     <>
       {Object.values(assembly.components).map((component) => {
-        // 'Toy' view hides the drive train entirely - a finished automaton
-        // only shows its crank and its performer, see StageMesh's box.
-        if (viewMode === 'toy' && !isFigure(component)) return null;
+        // The drive train stays visible in both views now - real automaton
+        // boxes (see AUTOMATON_VISUAL_DESIGN_SPEC.md reference photos) are
+        // open-frame, showing off the gears/cams, not sealed enclosures.
         if (isLinkage(component)) {
           return (
             <LinkageMesh
@@ -127,8 +126,6 @@ function AssemblyContents() {
 function GearBelts() {
   const assembly = useAssemblyStore((s) => s.assembly);
   const solveResult = useAssemblyStore((s) => s.solveResult);
-  const viewMode = useAssemblyStore((s) => s.viewMode);
-  if (viewMode === 'toy') return null;
   return (
     <>
       {Object.values(assembly.joints).map((joint) => {
