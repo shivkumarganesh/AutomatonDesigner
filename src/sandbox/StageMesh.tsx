@@ -1,6 +1,7 @@
 import type { StageConfig, ViewMode } from '../types/assembly';
 import type { Point2D } from '../types/geometry';
 import { mmToUnits, toScenePosition, Z_PLANE_SPACING_MM } from './scene';
+import { woodMaterialProps } from './woodMaterial';
 
 interface StageMeshProps {
   stage: StageConfig;
@@ -69,16 +70,16 @@ export function StageMesh({ stage, crankPivot, theta, viewMode }: StageMeshProps
               mechanism lives visibly in the open gap beneath it */}
           <mesh position={[cx, cy - yHalf, midZ]} receiveShadow castShadow>
             <boxGeometry args={[xHalf * 2, lidThickness, depthZ]} />
-            <meshStandardMaterial color={woodColor} roughness={0.8} />
+            <meshStandardMaterial {...woodMaterialProps({ color: woodColor, repeat: [4, 1] })} />
           </mesh>
           <mesh position={[cx, cy + yHalf, midZ]} receiveShadow castShadow>
             <boxGeometry args={[xHalf * 2, lidThickness, depthZ]} />
-            <meshStandardMaterial color={woodColor} roughness={0.8} />
+            <meshStandardMaterial {...woodMaterialProps({ color: woodColor, repeat: [4, 1] })} />
           </mesh>
           {corners.map(([px, pz], i) => (
             <mesh key={i} position={[px, cy, pz]} receiveShadow castShadow>
               <boxGeometry args={[postThickness, yHalf * 2, postThickness]} />
-              <meshStandardMaterial color={postColor} roughness={0.8} />
+              <meshStandardMaterial {...woodMaterialProps({ color: postColor, repeat: [1, 3] })} />
             </mesh>
           ))}
           {/* through-tenon pegs at every post/lid junction - the joinery

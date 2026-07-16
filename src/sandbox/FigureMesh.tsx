@@ -6,7 +6,7 @@ import type { AssemblyTree } from '../types/assembly';
 import type { Point2D } from '../types/geometry';
 import { add, angleOf, rotate, sub } from '../types/geometry';
 import type { SolveResult } from '../kinematics/solver';
-import { buildWingOutline } from '../geometry/figureShapes';
+import { buildBirdBodyOutline, buildBirdHeadOutline, buildFootOutline, buildWingOutline } from '../geometry/figureShapes';
 import { mmToUnits, toScenePosition } from './scene';
 
 interface FigureMeshProps {
@@ -31,22 +31,44 @@ interface FigureMeshProps {
  * clearly as the figure itself so the mechanical connection reads at a
  * glance.
  */
+/** Extrudes a local-mm 2D outline (as produced by geometry/figureShapes.ts)
+ *  to a flat laser-cuttable panel - the same outline the SVG exporter draws
+ *  for this part (export/partExtraction.ts), so the 3D preview never shows
+ *  a shape a builder couldn't actually cut. */
+function extrudeOutline(outline: Point2D[], thicknessMm: number): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  outline.forEach((p, i) => {
+    const sx = mmToUnits(p.x);
+    const sy = mmToUnits(p.y);
+    return i === 0 ? shape.moveTo(sx, sy) : shape.lineTo(sx, sy);
+  });
+  shape.closePath();
+  const depth = mmToUnits(thicknessMm);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 1 });
+  geo.translate(0, 0, -depth / 2);
+  return geo;
+}
+
 export function FigureMesh({ figure, assembly, solveResult, highlighted }: FigureMeshProps) {
   const pose = resolveFigurePose(figure, assembly, solveResult);
+  const thickness = figure.material.thickness;
 
-  const wingOutline = useMemo(() => buildWingOutline(figure.scale), [figure.scale]);
-  const wingGeometry = useMemo(() => {
-    if (figure.shape !== 'wing' && figure.shape !== 'pinwheel') return null;
-    const shape = new THREE.Shape();
-    wingOutline.forEach((p, i) => {
-      const sx = mmToUnits(p.x);
-      const sy = mmToUnits(p.y);
-      return i === 0 ? shape.moveTo(sx, sy) : shape.lineTo(sx, sy);
-    });
-    shape.closePath();
-    const depth = mmToUnits(figure.material.thickness);
-    return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 1 });
-  }, [wingOutline, figure.shape, figure.material.thickness]);
+  const wingGeometry = useMemo(
+    () => (figure.shape === 'wing' || figure.shape === 'pinwheel' ? extrudeOutline(buildWingOutline(figure.scale), thickness) : null),
+    [figure.shape, figure.scale, thickness],
+  );
+  const headGeometry = useMemo(
+    () => (figure.shape === 'bird-head' ? extrudeOutline(buildBirdHeadOutline(figure.scale), thickness) : null),
+    [figure.shape, figure.scale, thickness],
+  );
+  const bodyGeometry = useMemo(
+    () => (figure.shape === 'bird-body' ? extrudeOutline(buildBirdBodyOutline(figure.scale), thickness) : null),
+    [figure.shape, figure.scale, thickness],
+  );
+  const footGeometry = useMemo(
+    () => (figure.shape === 'foot' ? extrudeOutline(buildFootOutline(figure.scale), thickness) : null),
+    [figure.shape, figure.scale, thickness],
+  );
 
   if (!pose) return null;
   const { world, angle, driveZIndex, driveWorld } = pose;
@@ -66,7 +88,16 @@ export function FigureMesh({ figure, assembly, solveResult, highlighted }: Figur
           <meshStandardMaterial color={color} roughness={0.7} />
         </mesh>
       )}
-      <FigureBody figure={figure} position={position} angle={angle} color={color} wingGeometry={wingGeometry} />
+      <FigureBody
+        figure={figure}
+        position={position}
+        angle={angle}
+        color={color}
+        wingGeometry={wingGeometry}
+        headGeometry={headGeometry}
+        bodyGeometry={bodyGeometry}
+        footGeometry={footGeometry}
+      />
     </>
   );
 }
@@ -77,55 +108,48 @@ function FigureBody({
   angle,
   color,
   wingGeometry,
+  headGeometry,
+  bodyGeometry,
+  footGeometry,
 }: {
   figure: Figure;
   position: [number, number, number];
   angle: number;
   color: string;
   wingGeometry: THREE.ExtrudeGeometry | null;
+  headGeometry: THREE.ExtrudeGeometry | null;
+  bodyGeometry: THREE.ExtrudeGeometry | null;
+  footGeometry: THREE.ExtrudeGeometry | null;
 }) {
-  if (figure.shape === 'bird-head') {
+  if (figure.shape === 'bird-head' && headGeometry) {
     const r = mmToUnits(figure.scale);
     return (
       <group position={position} rotation={[0, 0, angle]}>
-        <mesh scale={[1.08, 0.95, 1]} castShadow>
-          <sphereGeometry args={[r, 20, 16]} />
-          <meshStandardMaterial color={color} roughness={0.65} />
+        <mesh geometry={headGeometry} castShadow receiveShadow>
+          <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
         </mesh>
-        <mesh position={[r * 0.9, 0, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow>
-          <coneGeometry args={[r * 0.35, r * 0.9, 12]} />
-          <meshStandardMaterial color="#f2cc8f" roughness={0.6} />
-        </mesh>
-        {/* comb - a small carved crest, the detail every reference bird
-            head has and a bare sphere-and-beak doesn't */}
-        <mesh position={[r * 0.1, r * 0.85, 0]} rotation={[0, 0, -0.2]} castShadow>
-          <coneGeometry args={[r * 0.22, r * 0.5, 8]} />
-          <meshStandardMaterial color="#c1440e" roughness={0.6} />
-        </mesh>
-        <mesh position={[r * 0.4, r * 0.55, r * 0.55]}>
-          <sphereGeometry args={[r * 0.15, 8, 8]} />
-          <meshStandardMaterial color="#1d1d1d" />
+        {/* painted eye dot - a flat cutout character is hand-painted, not
+            carved, so detail like this is a dab of colour, not a bump */}
+        <mesh position={[r * 0.55, r * 0.15, mmToUnits(figure.material.thickness) / 2 + mmToUnits(0.3)]}>
+          <circleGeometry args={[r * 0.13, 12]} />
+          <meshStandardMaterial color="#1d1d1d" roughness={0.6} />
         </mesh>
       </group>
     );
   }
 
-  if (figure.shape === 'bird-body') {
-    const r = mmToUnits(figure.scale);
+  if (figure.shape === 'bird-body' && bodyGeometry) {
     return (
-      <mesh position={position} rotation={[0, 0, angle]} scale={[1.15, 1, 0.9]} castShadow receiveShadow>
-        <sphereGeometry args={[r, 24, 18]} />
-        <meshStandardMaterial color={color} roughness={0.55} />
+      <mesh position={position} rotation={[0, 0, angle]} geometry={bodyGeometry} castShadow receiveShadow>
+        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
       </mesh>
     );
   }
 
-  if (figure.shape === 'foot') {
-    const r = mmToUnits(figure.scale);
+  if (figure.shape === 'foot' && footGeometry) {
     return (
-      <mesh position={position} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[r, r * 1.2, r * 0.6, 10]} />
-        <meshStandardMaterial color={color} roughness={0.6} />
+      <mesh position={position} rotation={[0, 0, angle]} geometry={footGeometry} castShadow receiveShadow>
+        <meshStandardMaterial color={color} roughness={0.65} side={THREE.DoubleSide} />
       </mesh>
     );
   }
@@ -140,11 +164,11 @@ function FigureBody({
 
   if (figure.shape === 'disc') {
     const r = mmToUnits(figure.scale);
-    // A rounded, slightly domed puck reads as a carved wooden hand/paddle;
-    // a flat-edged cylinder reads as a mechanical washer.
+    // A flat circular puck - a real laser-cuttable paddle/hand, matching
+    // the plain-circle silhouette the SVG exporter draws for this shape.
     return (
-      <mesh position={position} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, 0.55]} castShadow>
-        <sphereGeometry args={[r, 24, 16]} />
+      <mesh position={position} rotation={[0, 0, angle]} castShadow receiveShadow>
+        <cylinderGeometry args={[r, r, mmToUnits(figure.material.thickness), 24]} />
         <meshStandardMaterial color={color} roughness={0.65} />
       </mesh>
     );
@@ -168,11 +192,14 @@ function FigureBody({
     );
   }
 
+  // 'sphere' fallback - the one Figure shape genuinely without a flat-pack
+  // silhouette convention; a plain circle in the SVG exporter, a flat disc
+  // here for consistency (not a volumetric ball, per the same reasoning).
   const r = mmToUnits(figure.scale);
   return (
-    <mesh position={position} castShadow>
-      <sphereGeometry args={[r, 16, 12]} />
-      <meshStandardMaterial color={color} roughness={0.5} />
+    <mesh position={position} rotation={[0, 0, angle]} castShadow receiveShadow>
+      <cylinderGeometry args={[r, r, mmToUnits(figure.material.thickness), 20]} />
+      <meshStandardMaterial color={color} roughness={0.65} />
     </mesh>
   );
 }
