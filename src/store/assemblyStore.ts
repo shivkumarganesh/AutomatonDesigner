@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AssemblyTree, ValidationResult } from '../types/assembly';
+import type { AssemblyTree, ValidationResult, ViewMode } from '../types/assembly';
 import { solveAssembly, type SolveResult } from '../kinematics/solver';
 import { computeGrueblerDof, validateGrueblerDof } from '../kinematics/gruebler';
 import { detectPlanarCollisions } from '../kinematics/collision';
@@ -47,6 +47,7 @@ interface AssemblyState {
   assembly: AssemblyTree;
   solveResult: SolveResult;
   validation: ValidationResult;
+  viewMode: ViewMode;
 
   setTheta: (theta: number) => void;
   stepTheta: (deltaSeconds: number) => void;
@@ -56,6 +57,7 @@ interface AssemblyState {
   updateParam: (key: string, value: number | string) => void;
   resetAssembly: () => void;
   resolve: () => void;
+  setViewMode: (mode: ViewMode) => void;
 }
 
 function solveAndValidate(assembly: AssemblyTree, prevPositions?: Record<string, { x: number; y: number }>) {
@@ -78,6 +80,7 @@ export const useAssemblyStore = create<AssemblyState>((set, get) => ({
   assembly: initialAssembly,
   solveResult: initialSolve.solveResult,
   validation: initialSolve.validation,
+  viewMode: 'toy',
 
   setTheta: (theta) => {
     const wrapped = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -132,4 +135,6 @@ export const useAssemblyStore = create<AssemblyState>((set, get) => ({
     const { solveResult, validation } = solveAndValidate(assembly, get().solveResult.positions);
     set({ solveResult, validation });
   },
+
+  setViewMode: (mode) => set({ viewMode: mode }),
 }));

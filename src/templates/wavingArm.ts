@@ -51,6 +51,7 @@ function build(params: TemplateParams): AssemblyTree {
     attachJointId: mechanism.sliderJointId,
     localOffset: { x: 0, y: 0 },
     scale: handSize,
+    showConnectingRod: true,
   };
 
   return {
@@ -70,6 +71,7 @@ function build(params: TemplateParams): AssemblyTree {
       originMm: { x: (crankRadius + couplerLength) / 2, y: 0 },
       crankJointId: mechanism.crankPivotJointId,
       crankHandleLengthMm: 26,
+      enclosureTopZIndex: 0,
     },
   };
 }

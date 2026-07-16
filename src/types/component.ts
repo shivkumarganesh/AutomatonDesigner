@@ -86,6 +86,14 @@ export interface Gear extends BaseComponentFields {
   drivenByMeshJointId?: string;
   /** True for the single gear directly keyed to the master input shaft. */
   isInputGear?: boolean;
+  /** 'pulley' renders a smooth grooved disc (params.teeth/module still define
+   *  its pitch radius = module*teeth/2, and drive belts still ride the
+   *  gear-mesh joint's ratio - a belt drive is mechanically just a
+   *  same-direction rotational ratio coupling, identical to a gear mesh for
+   *  Grubler/solver purposes) instead of involute teeth, and a belt loop is
+   *  drawn to the paired pulley instead of the two meshing at a pitch
+   *  point. Defaults to 'gear'. */
+  visualStyle?: 'gear' | 'pulley';
   solved?: { rotation: number };
 }
 
@@ -184,14 +192,14 @@ export interface Follower extends BaseComponentFields {
 // kinematics/collision.ts.
 // ---------------------------------------------------------------------------
 
-export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc' | 'pinwheel';
+export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc' | 'pinwheel' | 'bird-body' | 'foot';
 
 export interface Figure extends BaseComponentFields {
   kind: 'figure';
   shape: FigureShapeKind;
   /** The joint whose solved world position this figure rides on every frame.
-   *  Mutually exclusive with `attachComponentId` - use this for anything
-   *  riding a Linkage/Follower pin. */
+   *  Mutually exclusive with `attachComponentId`/`staticPosition` - use
+   *  this for anything riding a Linkage/Follower pin. */
   attachJointId?: string;
   /** A second joint used to derive a facing/rotation angle (e.g. the far end
    *  of the link the figure is glued to), so the figure visibly orients
@@ -203,12 +211,23 @@ export interface Figure extends BaseComponentFields {
    *  coaxially with a gear or cam (e.g. a pinwheel), which has no second
    *  moving point to derive a facing angle from the way a Linkage pin
    *  does. World position is that component's pivot. Mutually exclusive
-   *  with `attachJointId`. */
+   *  with `attachJointId`/`staticPosition`. */
   attachComponentId?: string;
+  /** A fixed world position for a non-moving decorative part (a body/base/
+   *  foot the box carries but the mechanism doesn't drive) - real automata
+   *  are mostly static figure with one or two moving parts, not everything
+   *  in motion. Mutually exclusive with `attachJointId`/`attachComponentId`. */
+  staticPosition?: Point2D;
   /** Offset from the attach joint in the figure's own local frame, mm. */
   localOffset: Point2D;
   /** Overall size, mm. */
   scale: number;
+  /** If set and this figure rides `attachJointId`, a painted-dowel rod is
+   *  drawn from that joint's own z-plane up to this figure's z-plane -
+   *  the visible "push-rod" connecting the mechanism to the character
+   *  (see docs/AUTOMATON_VISUAL_DESIGN_SPEC.md). Omit for figures that sit
+   *  flush with their driving joint (no gap to bridge). */
+  showConnectingRod?: boolean;
 }
 
 export type Component = Linkage | Gear | Cam | Follower | Figure;

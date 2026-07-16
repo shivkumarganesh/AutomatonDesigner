@@ -5,15 +5,31 @@ export function ControlPanel() {
   const theta = useAssemblyStore((s) => s.assembly.driver.theta);
   const omega = useAssemblyStore((s) => s.assembly.driver.omega);
   const isPlaying = useAssemblyStore((s) => s.assembly.driver.isPlaying);
+  const viewMode = useAssemblyStore((s) => s.viewMode);
   const setTheta = useAssemblyStore((s) => s.setTheta);
   const setOmega = useAssemblyStore((s) => s.setOmega);
   const togglePlaying = useAssemblyStore((s) => s.togglePlaying);
   const resetAssembly = useAssemblyStore((s) => s.resetAssembly);
+  const setViewMode = useAssemblyStore((s) => s.setViewMode);
 
   const thetaDeg = theta * RAD2DEG;
 
   return (
     <div className="control-panel">
+      <h2>View</h2>
+      <div className="control-row view-toggle">
+        <button className={viewMode === 'toy' ? 'active' : ''} onClick={() => setViewMode('toy')}>
+          Finished Toy
+        </button>
+        <button className={viewMode === 'mechanism' ? 'active' : ''} onClick={() => setViewMode('mechanism')}>
+          Mechanism
+        </button>
+      </div>
+      <p className="hint">
+        "Finished Toy" hides the drive train inside its box, like the real thing. "Mechanism" opens it up for engineering
+        validation.
+      </p>
+
       <h2>Driver Input</h2>
       <div className="control-row">
         <button onClick={() => togglePlaying()}>{isPlaying ? 'Pause' : 'Play'}</button>

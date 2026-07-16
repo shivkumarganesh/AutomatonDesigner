@@ -56,7 +56,7 @@ function build(params: TemplateParams): AssemblyTree {
     zIndex: 0,
     material,
     fit: 'press-fit',
-    color: '#8d99ae',
+    color: '#8b5e34',
     pivotJointId: 'joint-cam',
     isInputCam: true,
     rotationOffset: 0,
@@ -69,7 +69,7 @@ function build(params: TemplateParams): AssemblyTree {
     zIndex: 0,
     material,
     fit: 'clearance',
-    color: '#6d597a',
+    color: '#a1623c',
     motion: 'oscillating',
     camId: 'cam1',
     pivotJointId: 'joint-arm',
@@ -90,6 +90,7 @@ function build(params: TemplateParams): AssemblyTree {
     orientationJointId: 'joint-arm',
     localOffset: { x: 0, y: 0 },
     scale: headSize,
+    showConnectingRod: true,
   };
 
   return {
@@ -109,6 +110,7 @@ function build(params: TemplateParams): AssemblyTree {
       originMm: { x: 30, y: 0 },
       crankJointId: 'joint-cam',
       crankHandleLengthMm: 28,
+      enclosureTopZIndex: 0,
     },
   };
 }

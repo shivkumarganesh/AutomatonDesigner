@@ -44,6 +44,15 @@ function build(params: TemplateParams): AssemblyTree {
   const bodyColor = strParam(params, BODY_COLOR as TemplateParamField & { kind: 'color' });
   const wingColor = strParam(params, WING_COLOR as TemplateParamField & { kind: 'color' });
 
+  // The gear/cam/follower subsystem hangs off the crank's own shaft
+  // (joint-A) at an angle rather than straight down, so it lands close to
+  // the crank-rocker's wing cluster around joint-D instead of off on its
+  // own - real automata keep every driven part clustered under one
+  // compact character, not spread across the whole sheet the way a purely
+  // engineering-driven layout would.
+  const gearTiltRad = (50 * Math.PI) / 180;
+  const gearOutPos = { x: centerDistance * Math.sin(gearTiltRad), y: -centerDistance * Math.cos(gearTiltRad) };
+
   const jointA: RevoluteJoint = { id: 'joint-A', type: 'revolute', zIndex: 0, componentIds: ['crank'], position: { x: 0, y: 0 }, grounded: true };
   const jointB: RevoluteJoint = { id: 'joint-B', type: 'revolute', zIndex: 0, componentIds: ['crank', 'coupler'], position: { x: 20, y: 0 }, grounded: false };
   const jointC: RevoluteJoint = {
@@ -60,7 +69,7 @@ function build(params: TemplateParams): AssemblyTree {
     type: 'revolute',
     zIndex: 1,
     componentIds: ['gearOut'],
-    position: { x: 0, y: -centerDistance },
+    position: gearOutPos,
     grounded: true,
   };
   const fixedGearInToCrank: FixedJoint = { id: 'fixed-gearIn-crank', type: 'fixed', zIndex: 1, componentIds: ['crank', 'gearIn'], position: { x: 0, y: 0 } };
@@ -69,7 +78,7 @@ function build(params: TemplateParams): AssemblyTree {
     type: 'fixed',
     zIndex: 1,
     componentIds: ['gearOut', 'cam1'],
-    position: { x: 0, y: -centerDistance },
+    position: gearOutPos,
   };
   const meshJoint1: GearMeshJoint = {
     id: 'mesh-1',
@@ -86,7 +95,7 @@ function build(params: TemplateParams): AssemblyTree {
     type: 'prismatic',
     zIndex: 2,
     componentIds: ['follower1'],
-    anchor: { x: 0, y: -centerDistance },
+    anchor: gearOutPos,
     axis: { x: 0, y: 1 },
     grounded: true,
   };
@@ -172,7 +181,7 @@ function build(params: TemplateParams): AssemblyTree {
     zIndex: 2,
     material,
     fit: 'press-fit',
-    color: '#8d99ae',
+    color: '#8b5e34',
     pivotJointId: 'joint-G2',
     drivenByMeshJointId: 'mesh-1',
     rotationOffset: 0,
@@ -185,33 +194,84 @@ function build(params: TemplateParams): AssemblyTree {
     zIndex: 2,
     material,
     fit: 'clearance',
-    color: '#6d597a',
+    color: '#a1623c',
     motion: 'translating',
     camId: 'cam1',
     axis: { x: 0, y: 1 },
-    axisAnchor: { x: 0, y: -centerDistance },
+    axisAnchor: gearOutPos,
     rollerRadius: 3,
     outputJointId: 'follower1-out',
   };
 
+  // The performer, built the way the research (docs/AUTOMATON_VISUAL_DESIGN_SPEC.md)
+  // says a real automaton actually is: a mostly-static body sitting on the
+  // box, with only the parts the mechanism truly drives in motion, each
+  // mounted with zero gap onto its own drive joint and a visible painted
+  // dowel (`showConnectingRod`) bridging the box top to that part - not a
+  // decorative shape floating unexplained near the gears.
+  const enclosureTopZIndex = 2;
+  const bodyZIndex = enclosureTopZIndex + 1;
+  const neckBaseX = gearOutPos.x;
+  const neckBaseY = gearOutPos.y + 8; // just below the follower's minimum reach
+
+  const birdBody: Figure = {
+    id: 'birdBody',
+    name: 'Body',
+    kind: 'figure',
+    zIndex: bodyZIndex,
+    material,
+    fit: 'press-fit',
+    color: bodyColor,
+    shape: 'bird-body',
+    staticPosition: { x: neckBaseX, y: neckBaseY },
+    localOffset: { x: 0, y: 0 },
+    scale: 26,
+  };
+  const leftFoot: Figure = {
+    id: 'leftFoot',
+    name: 'Left Foot',
+    kind: 'figure',
+    zIndex: bodyZIndex,
+    material,
+    fit: 'press-fit',
+    color: '#f2cc8f',
+    shape: 'foot',
+    staticPosition: { x: neckBaseX - 12, y: neckBaseY - 22 },
+    localOffset: { x: 0, y: 0 },
+    scale: 7,
+  };
+  const rightFoot: Figure = {
+    id: 'rightFoot',
+    name: 'Right Foot',
+    kind: 'figure',
+    zIndex: bodyZIndex,
+    material,
+    fit: 'press-fit',
+    color: '#f2cc8f',
+    shape: 'foot',
+    staticPosition: { x: neckBaseX + 12, y: neckBaseY - 22 },
+    localOffset: { x: 0, y: 0 },
+    scale: 7,
+  };
   const birdHead: Figure = {
     id: 'birdHead',
     name: 'Bird Head',
     kind: 'figure',
-    zIndex: 4,
+    zIndex: bodyZIndex + 1,
     material,
     fit: 'press-fit',
     color: bodyColor,
     shape: 'bird-head',
     attachJointId: 'follower1-out',
-    localOffset: { x: 0, y: 24 },
+    localOffset: { x: 0, y: 8 },
     scale: 18,
+    showConnectingRod: true,
   };
   const wing: Figure = {
     id: 'wing1',
     name: 'Left Wing',
     kind: 'figure',
-    zIndex: 4,
+    zIndex: bodyZIndex,
     material,
     fit: 'press-fit',
     color: wingColor,
@@ -220,6 +280,7 @@ function build(params: TemplateParams): AssemblyTree {
     orientationJointId: 'joint-C',
     localOffset: { x: 0, y: 0 },
     scale: wingSpan,
+    showConnectingRod: true,
   };
 
   const wing2Mechanism = createParallelMotionPair({
@@ -228,7 +289,9 @@ function build(params: TemplateParams): AssemblyTree {
     referenceOuterJointId: 'joint-C',
     referenceOuterPosition: jointC.position,
     armLength: 50,
-    newPivot: { x: 150, y: 0 },
+    // Stacked above joint-D (rather than far off to the side) so both
+    // wing pivots cluster tightly, closer to where the body actually is.
+    newPivot: { x: 90, y: 55 },
     zIndex: 0,
     material,
     fit: 'clearance',
@@ -237,7 +300,7 @@ function build(params: TemplateParams): AssemblyTree {
     id: 'wing2',
     name: 'Right Wing',
     kind: 'figure',
-    zIndex: 4,
+    zIndex: bodyZIndex,
     material,
     fit: 'press-fit',
     color: wingColor,
@@ -246,6 +309,7 @@ function build(params: TemplateParams): AssemblyTree {
     orientationJointId: wing2Mechanism.outputJointId,
     localOffset: { x: 0, y: 0 },
     scale: wingSpan,
+    showConnectingRod: true,
   };
 
   return {
@@ -260,6 +324,9 @@ function build(params: TemplateParams): AssemblyTree {
       gearOut,
       cam1,
       follower1: follower,
+      birdBody,
+      leftFoot,
+      rightFoot,
       birdHead,
       wing1: wing,
       wing2,
@@ -283,12 +350,13 @@ function build(params: TemplateParams): AssemblyTree {
     kerf: DEFAULT_KERF,
     canvasSize: { width: 300, height: 500 },
     stage: {
-      widthMm: 260,
-      depthMm: 220 + centerDistance - 60,
+      widthMm: 220,
+      depthMm: 210,
       heightMm: 20,
-      originMm: { x: 40, y: -25 - (centerDistance - 60) / 2 },
+      originMm: { x: 50, y: 10 },
       crankJointId: 'joint-A',
       crankHandleLengthMm: 32,
+      enclosureTopZIndex,
     },
   };
 }
