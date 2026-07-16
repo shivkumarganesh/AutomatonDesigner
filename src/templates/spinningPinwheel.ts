@@ -102,6 +102,17 @@ function build(params: TemplateParams): AssemblyTree {
     scale: bladeSize,
   };
 
+  // Box sized from the actual pulley/belt/blade geometry - the blade (a
+  // 4-vane pinwheel) reaches roughly 1.3x its scale from the output
+  // pulley's center, which dominates the pulley radii themselves.
+  const bladeReach = bladeSize * 1.3;
+  const mechXMin = -radiusIn;
+  const mechXMax = centerDistance + bladeReach;
+  const mechYSpan = bladeReach;
+  const sideMargin = 20;
+  const lidY = mechYSpan + 15;
+  const floorY = -mechYSpan - 15;
+
   return {
     id: 'spinning-pinwheel',
     name: 'Spinning Pinwheel',
@@ -113,10 +124,10 @@ function build(params: TemplateParams): AssemblyTree {
     kerf: DEFAULT_KERF,
     canvasSize: { width: 200, height: 150 },
     stage: {
-      widthMm: Math.max(160, centerDistance + 100),
-      depthMm: 140,
+      widthMm: mechXMax - mechXMin + sideMargin * 2,
+      depthMm: lidY - floorY,
       heightMm: 20,
-      originMm: { x: centerDistance / 2, y: 0 },
+      originMm: { x: (mechXMin + mechXMax) / 2, y: (lidY + floorY) / 2 },
       crankJointId: 'joint-A',
       crankHandleLengthMm: 28,
       enclosureTopZIndex: 0,

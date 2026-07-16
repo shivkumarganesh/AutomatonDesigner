@@ -81,6 +81,21 @@ export function StageMesh({ stage, crankPivot, theta, viewMode }: StageMeshProps
               <meshStandardMaterial color={postColor} roughness={0.8} />
             </mesh>
           ))}
+          {/* through-tenon pegs at every post/lid junction - the joinery
+              detail every reference box shows (pegs or notches poking past
+              the corner) that a bare mitred frame doesn't have */}
+          {corners.map(([px, pz], i) => (
+            <group key={`tenon-${i}`}>
+              <mesh position={[px, cy - yHalf - lidThickness / 2 - mmToUnits(1), pz]} castShadow>
+                <boxGeometry args={[postThickness * 0.6, mmToUnits(2), postThickness * 0.6]} />
+                <meshStandardMaterial color={postColor} roughness={0.8} />
+              </mesh>
+              <mesh position={[px, cy + yHalf + lidThickness / 2 + mmToUnits(1), pz]} castShadow>
+                <boxGeometry args={[postThickness * 0.6, mmToUnits(2), postThickness * 0.6]} />
+                <meshStandardMaterial color={postColor} roughness={0.8} />
+              </mesh>
+            </group>
+          ))}
         </>
       ) : (
         <mesh position={[cx, cy, midZ]} receiveShadow castShadow>

@@ -283,6 +283,7 @@ function build(params: TemplateParams): AssemblyTree {
     showConnectingRod: true,
   };
 
+  const wing2PivotPos = { x: 90, y: 55 };
   const wing2Mechanism = createParallelMotionPair({
     idPrefix: 'wing2',
     referencePivot: jointD.position,
@@ -291,7 +292,7 @@ function build(params: TemplateParams): AssemblyTree {
     armLength: 50,
     // Stacked above joint-D (rather than far off to the side) so both
     // wing pivots cluster tightly, closer to where the body actually is.
-    newPivot: { x: 90, y: 55 },
+    newPivot: wing2PivotPos,
     zIndex: 0,
     material,
     fit: 'clearance',
@@ -311,6 +312,20 @@ function build(params: TemplateParams): AssemblyTree {
     scale: wingSpan,
     showConnectingRod: true,
   };
+
+  // Box sized from the mechanism's actual reach - the crank-rocker's own
+  // joints, the tilted gear/cam/follower cluster (down to its lowest peck),
+  // and both wing pivots widened by the current wing span - rather than a
+  // guessed constant.
+  const wingReach = wingSpan * 1.2;
+  const camLowestY = gearOutPos.y - (15 + lift + 3); // cam base+lift+roller, worst of the peck stroke
+  const mechXMin = -30;
+  const mechXMax = Math.max(jointD.position.x, wing2PivotPos.x) + wingReach;
+  const mechYMin = Math.min(camLowestY, neckBaseY - 22 - 10); // feet floor vs. cam's lowest reach
+  const mechYMax = wing2PivotPos.y + wingReach;
+  const sideMargin = 20;
+  const lidY = mechYMax + 15;
+  const floorY = mechYMin - 15;
 
   return {
     id: 'pecking-bird',
@@ -350,10 +365,10 @@ function build(params: TemplateParams): AssemblyTree {
     kerf: DEFAULT_KERF,
     canvasSize: { width: 300, height: 500 },
     stage: {
-      widthMm: 220,
-      depthMm: 210,
+      widthMm: mechXMax - mechXMin + sideMargin * 2,
+      depthMm: lidY - floorY,
       heightMm: 20,
-      originMm: { x: 50, y: 10 },
+      originMm: { x: (mechXMin + mechXMax) / 2, y: (lidY + floorY) / 2 },
       crankJointId: 'joint-A',
       crankHandleLengthMm: 32,
       enclosureTopZIndex,

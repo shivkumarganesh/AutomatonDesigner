@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { Figure } from '../types/component';
+import { isFollower } from '../types/component';
 import type { AssemblyTree } from '../types/assembly';
 import type { Point2D } from '../types/geometry';
 import { add, angleOf, rotate, sub } from '../types/geometry';
 import type { SolveResult } from '../kinematics/solver';
 import { buildWingOutline } from '../geometry/figureShapes';
-import { mmToUnits, toScenePosition, Z_PLANE_SPACING_MM } from './scene';
+import { mmToUnits, toScenePosition } from './scene';
 
 interface FigureMeshProps {
   figure: Figure;
@@ -48,16 +49,19 @@ export function FigureMesh({ figure, assembly, solveResult, highlighted }: Figur
   }, [wingOutline, figure.shape, figure.material.thickness]);
 
   if (!pose) return null;
-  const { world, angle, driveZIndex } = pose;
+  const { world, angle, driveZIndex, driveWorld } = pose;
 
   const position = toScenePosition(world, figure.zIndex);
   const color = highlighted ? '#ff2222' : figure.color ?? '#e07a5f';
-  const rod = figure.showConnectingRod && driveZIndex !== undefined ? buildConnectingRod(world, driveZIndex, figure.zIndex) : null;
+  const rod =
+    figure.showConnectingRod && driveZIndex !== undefined && driveWorld
+      ? buildConnectingRod(toScenePosition(driveWorld, driveZIndex), position)
+      : null;
 
   return (
     <>
       {rod && (
-        <mesh position={rod.center} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <mesh position={rod.center} quaternion={rod.quaternion} castShadow>
           <cylinderGeometry args={[rod.radius, rod.radius, rod.length, 12]} />
           <meshStandardMaterial color={color} roughness={0.7} />
         </mesh>
@@ -84,13 +88,19 @@ function FigureBody({
     const r = mmToUnits(figure.scale);
     return (
       <group position={position} rotation={[0, 0, angle]}>
-        <mesh castShadow>
+        <mesh scale={[1.08, 0.95, 1]} castShadow>
           <sphereGeometry args={[r, 20, 16]} />
-          <meshStandardMaterial color={color} roughness={0.5} />
+          <meshStandardMaterial color={color} roughness={0.65} />
         </mesh>
         <mesh position={[r * 0.9, 0, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow>
           <coneGeometry args={[r * 0.35, r * 0.9, 12]} />
           <meshStandardMaterial color="#f2cc8f" roughness={0.6} />
+        </mesh>
+        {/* comb - a small carved crest, the detail every reference bird
+            head has and a bare sphere-and-beak doesn't */}
+        <mesh position={[r * 0.1, r * 0.85, 0]} rotation={[0, 0, -0.2]} castShadow>
+          <coneGeometry args={[r * 0.22, r * 0.5, 8]} />
+          <meshStandardMaterial color="#c1440e" roughness={0.6} />
         </mesh>
         <mesh position={[r * 0.4, r * 0.55, r * 0.55]}>
           <sphereGeometry args={[r * 0.15, 8, 8]} />
@@ -130,10 +140,12 @@ function FigureBody({
 
   if (figure.shape === 'disc') {
     const r = mmToUnits(figure.scale);
+    // A rounded, slightly domed puck reads as a carved wooden hand/paddle;
+    // a flat-edged cylinder reads as a mechanical washer.
     return (
-      <mesh position={position} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[r, r, mmToUnits(figure.material.thickness), 24]} />
-        <meshStandardMaterial color={color} roughness={0.6} />
+      <mesh position={position} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, 0.55]} castShadow>
+        <sphereGeometry args={[r, 24, 16]} />
+        <meshStandardMaterial color={color} roughness={0.65} />
       </mesh>
     );
   }
@@ -168,8 +180,11 @@ function FigureBody({
 interface FigurePose {
   world: Point2D;
   angle: number;
-  /** The driving joint/component's own zIndex, for connecting-rod length. */
+  /** The driving joint/component's own zIndex, for the connecting rod. */
   driveZIndex?: number;
+  /** The driving joint/component's own (unelevated) world position, for
+   *  the connecting rod's start point. */
+  driveWorld?: Point2D;
 }
 
 /**
@@ -177,12 +192,17 @@ interface FigurePose {
  * joint's position (+ optional second joint for a facing angle), ride a
  * Gear/Cam's own solved rotation directly (no second moving point to
  * derive an angle from the way a shared pin does), or sit at a fixed
- * world position for a static (non-driven) decorative part.
+ * world position for a static (non-driven) decorative part. In the first
+ * two modes, `elevationMm` (see types/component.ts) is applied last, as a
+ * fixed unrotated world-Y lift - independent of the local-frame offset
+ * that rotates with the joint's own motion.
  */
 function resolveFigurePose(figure: Figure, assembly: AssemblyTree, solveResult: SolveResult): FigurePose | null {
   if (figure.staticPosition) {
     return { world: figure.staticPosition, angle: 0 };
   }
+
+  const elevation: Point2D = { x: 0, y: figure.elevationMm ?? 0 };
 
   if (figure.attachComponentId) {
     const component = assembly.components[figure.attachComponentId];
@@ -190,7 +210,8 @@ function resolveFigurePose(figure: Figure, assembly: AssemblyTree, solveResult: 
     const pivot = solveResult.positions[component.pivotJointId];
     const angle = component.kind === 'gear' ? solveResult.rotations.gears[component.id] : solveResult.rotations.cams[component.id];
     if (!pivot || angle === undefined) return null;
-    return { world: add(pivot, rotate(figure.localOffset, angle)), angle, driveZIndex: component.zIndex };
+    const world = add(add(pivot, rotate(figure.localOffset, angle)), elevation);
+    return { world, angle, driveZIndex: component.zIndex, driveWorld: pivot };
   }
 
   if (figure.attachJointId) {
@@ -198,22 +219,37 @@ function resolveFigurePose(figure: Figure, assembly: AssemblyTree, solveResult: 
     if (!attach) return null;
     const orientationTarget = figure.orientationJointId ? solveResult.positions[figure.orientationJointId] : undefined;
     const angle = orientationTarget ? angleOf(sub(orientationTarget, attach)) : 0;
-    const driveZIndex = assembly.joints[figure.attachJointId]?.zIndex;
-    return { world: add(attach, rotate(figure.localOffset, angle)), angle, driveZIndex };
+    // A Follower's `outputJointId` (e.g. a cam-follower's roller-center pin)
+    // is a synthetic id that only ever appears as a key in solveResult -
+    // it's never registered in assembly.joints, so it has no zIndex of its
+    // own there. Fall back to the driving Follower component's zIndex, or
+    // the connecting rod silently never renders (driveZIndex stays
+    // undefined) no matter what showConnectingRod says.
+    const driveZIndex =
+      assembly.joints[figure.attachJointId]?.zIndex ??
+      Object.values(assembly.components).find((c) => isFollower(c) && c.outputJointId === figure.attachJointId)?.zIndex;
+    const world = add(add(attach, rotate(figure.localOffset, angle)), elevation);
+    return { world, angle, driveZIndex, driveWorld: attach };
   }
 
   return null;
 }
 
-/** A vertical dowel spanning from the driving joint's z-plane up to the
- *  figure's own z-plane, in scene units - the visible push-rod. */
-function buildConnectingRod(world: Point2D, driveZIndex: number, figureZIndex: number) {
-  const lowZ = driveZIndex * Z_PLANE_SPACING_MM * mmToUnits(1);
-  const highZ = figureZIndex * Z_PLANE_SPACING_MM * mmToUnits(1);
-  const length = Math.abs(highZ - lowZ);
-  const scenePos = toScenePosition(world, 0);
+/** A dowel spanning from the driving joint/component's actual solved scene
+ *  position to wherever this figure ends up (after local offset and
+ *  elevation) - the visible push-rod, oriented along whatever direction
+ *  that gap actually runs in 3D (usually mostly +Y now that figures carry
+ *  real elevation, occasionally also spanning a zIndex layer change). */
+function buildConnectingRod(a: [number, number, number], b: [number, number, number]) {
+  const start = new THREE.Vector3(...a);
+  const end = new THREE.Vector3(...b);
+  const delta = end.clone().sub(start);
+  const length = delta.length();
+  const center = start.clone().add(end).multiplyScalar(0.5);
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize());
   return {
-    center: [scenePos[0], scenePos[1], (lowZ + highZ) / 2] as [number, number, number],
+    center: center.toArray() as [number, number, number],
+    quaternion,
     length: Math.max(length, mmToUnits(1)),
     radius: mmToUnits(2.5),
   };

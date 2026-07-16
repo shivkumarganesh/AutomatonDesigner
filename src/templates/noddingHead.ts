@@ -77,6 +77,22 @@ function build(params: TemplateParams): AssemblyTree {
     rollerRadius: 3,
     outputJointId: 'head-out',
   };
+  // Box sized from the mechanism's own current reach (cam radius, follower
+  // pivot + arm length) rather than a guessed constant, so it hugs the
+  // mechanism instead of floating it in a mostly-empty frame - live-derived
+  // from the same params the user is tuning, not a fixed worst case, since
+  // this is a design preview that re-fits on every param change. The head
+  // gets a real elevation - a "neck" rising from the follower's output
+  // joint up past the lid - instead of sitting right on top of (and
+  // hiding) the cam, the way real perched-bird automata are built.
+  const camRadius = 15 + lift; // baseRadius + current lift
+  const mechXMin = -camRadius;
+  const mechXMax = 60 + armLength; // follower pivot x + current arm length
+  const mechYSpan = camRadius + 3; // cam edge + roller radius
+  const sideMargin = 20;
+  const lidY = mechYSpan + 15;
+  const floorY = -mechYSpan - 15;
+
   const head: Figure = {
     id: 'head',
     name: 'Head',
@@ -89,6 +105,7 @@ function build(params: TemplateParams): AssemblyTree {
     attachJointId: 'head-out',
     orientationJointId: 'joint-arm',
     localOffset: { x: 0, y: 0 },
+    elevationMm: lidY + 8,
     scale: headSize,
     showConnectingRod: true,
   };
@@ -104,10 +121,10 @@ function build(params: TemplateParams): AssemblyTree {
     kerf: DEFAULT_KERF,
     canvasSize: { width: 200, height: 200 },
     stage: {
-      widthMm: 160,
-      depthMm: 140,
+      widthMm: mechXMax - mechXMin + sideMargin * 2,
+      depthMm: lidY - floorY,
       heightMm: 20,
-      originMm: { x: 30, y: 0 },
+      originMm: { x: (mechXMin + mechXMax) / 2, y: (lidY + floorY) / 2 },
       crankJointId: 'joint-cam',
       crankHandleLengthMm: 28,
       enclosureTopZIndex: 0,

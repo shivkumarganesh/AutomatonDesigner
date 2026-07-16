@@ -1,6 +1,6 @@
 import { Suspense, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Grid, OrbitControls } from '@react-three/drei';
+import { ContactShadows, Grid, OrbitControls } from '@react-three/drei';
 import { useAssemblyStore } from '../store/assemblyStore';
 import { isCam, isFigure, isFollower, isGear, isLinkage } from '../types/component';
 import { GearMesh } from './GearMesh';
@@ -31,6 +31,32 @@ function GroundPivots() {
           <mesh key={id} position={toScenePosition(joint.position, joint.zIndex)} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[mmToUnits(2), mmToUnits(2), mmToUnits(30), 12]} />
             <meshStandardMaterial color="#111111" />
+          </mesh>
+        );
+      })}
+    </>
+  );
+}
+
+/** Small dark pivot pins at every revolute/prismatic joint (grounded or
+ *  not) in toy view - makes each handoff between parts (crank pin to
+ *  coupler, coupler to slider, etc) read as a deliberate articulation
+ *  point instead of two shapes that merely happen to touch. */
+function JointPins() {
+  const assembly = useAssemblyStore((s) => s.assembly);
+  const solveResult = useAssemblyStore((s) => s.solveResult);
+  const viewMode = useAssemblyStore((s) => s.viewMode);
+  if (viewMode !== 'toy') return null;
+  return (
+    <>
+      {Object.values(assembly.joints).map((joint) => {
+        if (joint.type !== 'revolute' && joint.type !== 'prismatic') return null;
+        const pos = solveResult.positions[joint.id];
+        if (!pos) return null;
+        return (
+          <mesh key={joint.id} position={toScenePosition(pos, joint.zIndex)} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[mmToUnits(2.2), mmToUnits(2.2), mmToUnits(6), 12]} />
+            <meshStandardMaterial color="#241c14" metalness={0.4} roughness={0.5} />
           </mesh>
         );
       })}
@@ -205,6 +231,7 @@ export function SandboxCanvas() {
         <Stage />
         <AssemblyContents />
         <GearBelts />
+        <JointPins />
       </Suspense>
       <Grid
         args={[gridSize, gridSize]}
@@ -214,6 +241,16 @@ export function SandboxCanvas() {
         sectionSize={5}
         sectionColor="#3d4150"
         fadeDistance={gridSize * 1.5}
+      />
+      {/* Soft grounded shadow under the box - a flat-lit CG object with no
+          contact shadow reads as floating/fake no matter how good its
+          materials are; this is the cheapest fix with the biggest payoff. */}
+      <ContactShadows
+        position={[target[0], floorY + 0.01, target[2]]}
+        opacity={0.55}
+        scale={gridSize}
+        blur={2.4}
+        far={gridSize * 0.4}
       />
       <OrbitControls makeDefault target={target} />
     </Canvas>

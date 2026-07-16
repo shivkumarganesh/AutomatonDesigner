@@ -4,7 +4,7 @@ import { isCam, isFollower, isGear, isLinkage } from '../types/component';
 import type { Joint, PrismaticJoint } from '../types/joint';
 import type { Point2D } from '../types/geometry';
 import { add, angleOf, distance, normalizeAngle, perp, rotate, scale, sub } from '../types/geometry';
-import { camProfileRadius, intersectCircles, pickNearest } from '../geometry/cam';
+import { camProfileRadius, intersectCircles, pickBySide, pickNearest } from '../geometry/cam';
 import { solveLinearSystem } from './linearAlgebra';
 
 export interface SolveOptions {
@@ -186,7 +186,10 @@ export function solveAssembly(
         if (follower.outputJointId) positions[follower.outputJointId] = fallback;
         continue;
       }
-      const chosen = pickNearest(points, prev);
+      // No previous frame to track continuity from (first solve, or a
+      // template/param change that reset it) - pick the side the follower
+      // was actually authored on instead of an arbitrary formula artifact.
+      const chosen = prev ? pickNearest(points, prev) : pickBySide(points, follower.armSide ?? 1);
       followerOutputs[follower.id] = { displacement: reach, position: chosen };
       if (follower.outputJointId) positions[follower.outputJointId] = chosen;
     }

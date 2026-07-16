@@ -172,6 +172,16 @@ export interface Follower extends BaseComponentFields {
   pivotJointId?: string;
   /** oscillating followers: arm length from pivot to roller center, mm */
   armLength?: number;
+  /** oscillating followers: the cam-pivot-to-follower-pivot line always
+   *  has *two* points at the roller's required reach; which one is the
+   *  mechanically sane arm pose (not crossed through the cam) depends on
+   *  which side of that line the follower was actually built on. +1 picks
+   *  the point counter-clockwise from cam pivot to follower pivot, -1 the
+   *  clockwise one. Only matters for disambiguating the very first solve
+   *  (every frame after tracks the continuous branch via the previous
+   *  frame's position) - same idea as Cam.profile.requiredDirection.
+   *  Defaults to +1. */
+  armSide?: 1 | -1;
   /** Optional joint id exposing this follower's roller-center as a pin so
    *  downstream Linkages can key off the follower's motion (e.g. a cam
    *  driving a rocker through a follower rod). */
@@ -218,15 +228,28 @@ export interface Figure extends BaseComponentFields {
    *  are mostly static figure with one or two moving parts, not everything
    *  in motion. Mutually exclusive with `attachJointId`/`attachComponentId`. */
   staticPosition?: Point2D;
-  /** Offset from the attach joint in the figure's own local frame, mm. */
+  /** Offset from the attach joint in the figure's own local frame, mm -
+   *  rotates with the joint's facing angle when `orientationJointId` (or a
+   *  spinning `attachComponentId`) is set, so it's for small local
+   *  adjustments, not standing height. */
   localOffset: Point2D;
+  /** A fixed, *unrotated* lift in world-Y (screen-up) applied after
+   *  everything else, mm - how far this figure stands above its driving
+   *  joint's own position. Real automata elevate the performer on a lid
+   *  well above the mechanism (a cat's hip pin is inches above the cam
+   *  that drives it); without this, a driven figure could only be as high
+   *  as the mechanism's own motion happened to reach, which is why heads/
+   *  bodies used to sit right on top of - and hide - their crank. Ignored
+   *  for figures with no attach point (nothing to elevate above). */
+  elevationMm?: number;
   /** Overall size, mm. */
   scale: number;
-  /** If set and this figure rides `attachJointId`, a painted-dowel rod is
-   *  drawn from that joint's own z-plane up to this figure's z-plane -
-   *  the visible "push-rod" connecting the mechanism to the character
-   *  (see docs/AUTOMATON_VISUAL_DESIGN_SPEC.md). Omit for figures that sit
-   *  flush with their driving joint (no gap to bridge). */
+  /** If set and this figure rides `attachJointId`/`attachComponentId`, a
+   *  painted-dowel rod is drawn from that joint/component's own solved
+   *  scene position up to wherever this figure ends up (after localOffset
+   *  and elevationMm) - the visible "push-rod" connecting the mechanism
+   *  to the character (see docs/AUTOMATON_VISUAL_DESIGN_SPEC.md). Omit for
+   *  figures that sit flush with their driving joint (no gap to bridge). */
   showConnectingRod?: boolean;
 }
 
