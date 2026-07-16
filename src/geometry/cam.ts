@@ -135,3 +135,17 @@ export function pickNearest(candidates: [Point2D, Point2D], reference: Point2D |
   const d1 = distance(candidates[1], reference);
   return d0 <= d1 ? candidates[0] : candidates[1];
 }
+
+/**
+ * Picks whichever of `intersectCircles(c1, r1, c2, r2)`'s two candidates
+ * sits on the given side of the c1->c2 line (+1 = counter-clockwise/left,
+ * -1 = clockwise/right). `intersectCircles`'s own [candidate0, candidate1]
+ * ordering always puts candidate0 on the +1 side by construction, so this
+ * just indexes into that pair - callers must pass `candidates` from a call
+ * with the same c1/c2 order this is meant to disambiguate. Used to resolve
+ * a follower's very first solve, before any previous-frame position
+ * exists to track continuity from (see Follower.armSide).
+ */
+export function pickBySide(candidates: [Point2D, Point2D], side: 1 | -1): Point2D {
+  return side >= 0 ? candidates[0] : candidates[1];
+}

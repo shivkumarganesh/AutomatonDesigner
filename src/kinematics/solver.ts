@@ -4,7 +4,7 @@ import { isCam, isFollower, isGear, isLinkage } from '../types/component';
 import type { Joint, PrismaticJoint } from '../types/joint';
 import type { Point2D } from '../types/geometry';
 import { add, angleOf, distance, normalizeAngle, perp, rotate, scale, sub } from '../types/geometry';
-import { camProfileRadius, intersectCircles, pickNearest } from '../geometry/cam';
+import { camProfileRadius, intersectCircles, pickBySide, pickNearest } from '../geometry/cam';
 import { solveLinearSystem } from './linearAlgebra';
 
 export interface SolveOptions {
@@ -186,7 +186,10 @@ export function solveAssembly(
         if (follower.outputJointId) positions[follower.outputJointId] = fallback;
         continue;
       }
-      const chosen = pickNearest(points, prev);
+      // No previous frame to track continuity from (first solve, or a
+      // template/param change that reset it) - pick the side the follower
+      // was actually authored on instead of an arbitrary formula artifact.
+      const chosen = prev ? pickNearest(points, prev) : pickBySide(points, follower.armSide ?? 1);
       followerOutputs[follower.id] = { displacement: reach, position: chosen };
       if (follower.outputJointId) positions[follower.outputJointId] = chosen;
     }
@@ -199,7 +202,7 @@ export function solveAssembly(
   const unknownIds = collectUnknownJointIds(floatingLinkages, assembly.joints, positions);
   for (const id of unknownIds) {
     if (positions[id]) continue;
-    positions[id] = prevPositions?.[id] ?? initialGuess(id, assembly.joints);
+    positions[id] = prevPositions?.[id] ?? initialGuess(id, floatingLinkages, positions, assembly.joints);
   }
 
   const nrResult = unknownIds.length > 0 ? newtonRaphsonSolve(unknownIds, positions, constraints, opts) : { converged: true, iterations: 0, maxResidual: 0, failedAt: [] as string[] };
@@ -282,7 +285,29 @@ function collectUnknownJointIds(
   return Array.from(ids);
 }
 
-function initialGuess(jointId: string, joints: Record<string, Joint>): Point2D {
+/**
+ * A slider's slide-axis line generally crosses a driving pin's reach circle
+ * at *two* points (the classic crank-slider ambiguity); with no better seed,
+ * Newton-Raphson just falls into whichever root sits closer to the initial
+ * guess, which used to be the axis anchor itself - a coin flip that, once
+ * settled on the first solve, persists every frame after via prevPositions
+ * continuity. Prefer projecting from a linkage-mate whose position is
+ * already known, offset by this joint's *local* geometry relative to that
+ * mate: a zeroth-order guess (assumes near-zero relative rotation) that
+ * lands on the branch the mechanism's local coordinates were actually
+ * authored against, instead of leaving the branch to chance.
+ */
+function initialGuess(jointId: string, linkages: Linkage[], positions: Record<string, Point2D>, joints: Record<string, Joint>): Point2D {
+  for (const link of linkages) {
+    const target = link.points.find((p) => p.jointId === jointId);
+    if (!target) continue;
+    for (const mate of link.points) {
+      if (mate.jointId === jointId) continue;
+      const mateWorld = positions[mate.jointId];
+      if (!mateWorld) continue;
+      return add(mateWorld, sub(target.local, mate.local));
+    }
+  }
   const joint = joints[jointId];
   if (joint && 'position' in joint && joint.position) return joint.position;
   if (joint && joint.type === 'prismatic') return joint.anchor;

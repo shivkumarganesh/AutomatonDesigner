@@ -51,7 +51,19 @@ function build(params: TemplateParams): AssemblyTree {
     attachJointId: mechanism.sliderJointId,
     localOffset: { x: 0, y: 0 },
     scale: handSize,
+    showConnectingRod: true,
   };
+
+  // Box sized from the actual crank+slider reach: the slider's in-line
+  // travel range is [couplerLength - crankRadius, couplerLength +
+  // crankRadius], widened by the hand disc's own radius on each end.
+  const sliderMin = couplerLength - crankRadius;
+  const sliderMax = couplerLength + crankRadius;
+  const mechXMin = Math.min(-crankRadius, sliderMin - handSize);
+  const mechXMax = sliderMax + handSize;
+  const mechYSpan = Math.max(crankRadius, handSize);
+  const sideMargin = 20;
+  const topMargin = 15;
 
   return {
     id: 'waving-arm',
@@ -64,12 +76,13 @@ function build(params: TemplateParams): AssemblyTree {
     kerf: DEFAULT_KERF,
     canvasSize: { width: 220, height: 120 },
     stage: {
-      widthMm: crankRadius + couplerLength + 100,
-      depthMm: 120,
+      widthMm: mechXMax - mechXMin + sideMargin * 2,
+      depthMm: (mechYSpan + topMargin) * 2,
       heightMm: 20,
-      originMm: { x: (crankRadius + couplerLength) / 2, y: 0 },
+      originMm: { x: (mechXMin + mechXMax) / 2, y: 0 },
       crankJointId: mechanism.crankPivotJointId,
       crankHandleLengthMm: 26,
+      enclosureTopZIndex: 0,
     },
   };
 }

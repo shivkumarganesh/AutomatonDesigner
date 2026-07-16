@@ -37,7 +37,19 @@ export interface StageConfig {
    *  (normally the input crank's ground pivot). */
   crankJointId: string;
   crankHandleLengthMm: number;
+  /** The z-plane index the box's top panel sits just above, in "Finished
+   *  Toy" view (see ViewMode) - everything at or below this zIndex is the
+   *  hidden drive train; every Figure should sit above it. Pick the
+   *  highest mechanism zIndex in the assembly (not the Figures riding it). */
+  enclosureTopZIndex: number;
 }
+
+/** 'mechanism' is the engineering sandbox (Phase 2's original requirement -
+ *  every gear/cam/linkage visible for validation). 'toy' hides the drive
+ *  train inside an opaque box so only the crank and the performer are
+ *  visible, the way a finished automaton actually looks - see
+ *  docs/AUTOMATON_VISUAL_DESIGN_SPEC.md. */
+export type ViewMode = 'mechanism' | 'toy';
 
 /**
  * The full assembly state tree. Link #1 in Grubler's equation is always

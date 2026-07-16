@@ -8,7 +8,7 @@ import { add, normalize, scale } from '../types/geometry';
 import { buildRoundedHullPath, circlePath } from '../geometry/roundedOutline';
 import { generateGearOutline } from '../geometry/involute';
 import { camProfileRadius } from '../geometry/cam';
-import { buildWingOutline } from '../geometry/figureShapes';
+import { buildBirdBodyOutline, buildBirdHeadOutline, buildFootOutline, buildWingOutline } from '../geometry/figureShapes';
 
 /** Half-width of a laser-cut linkage bar, mm - matches the same constant
  *  LinkageMesh/collision.ts use for the 3D render and collision capsules,
@@ -122,11 +122,15 @@ export function extractPartOutline(component: Component, assembly: AssemblyTree)
   }
 
   if (isFigure(component)) {
+    // Every shape here must be the exact outline sandbox/FigureMesh.tsx
+    // extrudes for the 3D preview - a figure the 3D view shows as one
+    // silhouette and the cut sheet draws as another is a part a builder
+    // can't actually assemble from what they saw on screen.
     if (component.shape === 'wing' || component.shape === 'pinwheel') {
       // A 'pinwheel' Figure renders as several rotated copies of this same
-      // blade in the 3D sandbox (see FigureMesh.tsx) - exported once here
-      // as a single cuttable blade; the assembly guide (Phase 4) is where
-      // "cut N of these" gets called out, not the part sheet itself.
+      // blade in the 3D sandbox - exported once here as a single cuttable
+      // blade; the assembly guide (Phase 4) is where "cut N of these" gets
+      // called out, not the part sheet itself.
       const outline = buildWingOutline(component.scale);
       return {
         componentId: component.id,
@@ -137,8 +141,40 @@ export function extractPartOutline(component: Component, assembly: AssemblyTree)
         bbox: bboxOf(outline, 0),
       };
     }
-    // bird-head/sphere/disc: a plain circle silhouette is a reasonable
-    // flat-pattern stand-in for a modeled 3D shape.
+    if (component.shape === 'bird-head') {
+      const outline = buildBirdHeadOutline(component.scale);
+      return {
+        componentId: component.id,
+        name: component.name,
+        zIndex: component.zIndex,
+        outerPath: polylinePath(outline),
+        holes: [],
+        bbox: bboxOf(outline, 0),
+      };
+    }
+    if (component.shape === 'bird-body') {
+      const outline = buildBirdBodyOutline(component.scale);
+      return {
+        componentId: component.id,
+        name: component.name,
+        zIndex: component.zIndex,
+        outerPath: polylinePath(outline),
+        holes: [],
+        bbox: bboxOf(outline, 0),
+      };
+    }
+    if (component.shape === 'foot') {
+      const outline = buildFootOutline(component.scale);
+      return {
+        componentId: component.id,
+        name: component.name,
+        zIndex: component.zIndex,
+        outerPath: polylinePath(outline),
+        holes: [],
+        bbox: bboxOf(outline, 0),
+      };
+    }
+    // sphere/disc: genuinely a plain circle in both the 3D preview and here.
     const r = component.scale;
     return {
       componentId: component.id,

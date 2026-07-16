@@ -86,6 +86,14 @@ export interface Gear extends BaseComponentFields {
   drivenByMeshJointId?: string;
   /** True for the single gear directly keyed to the master input shaft. */
   isInputGear?: boolean;
+  /** 'pulley' renders a smooth grooved disc (params.teeth/module still define
+   *  its pitch radius = module*teeth/2, and drive belts still ride the
+   *  gear-mesh joint's ratio - a belt drive is mechanically just a
+   *  same-direction rotational ratio coupling, identical to a gear mesh for
+   *  Grubler/solver purposes) instead of involute teeth, and a belt loop is
+   *  drawn to the paired pulley instead of the two meshing at a pitch
+   *  point. Defaults to 'gear'. */
+  visualStyle?: 'gear' | 'pulley';
   solved?: { rotation: number };
 }
 
@@ -164,6 +172,16 @@ export interface Follower extends BaseComponentFields {
   pivotJointId?: string;
   /** oscillating followers: arm length from pivot to roller center, mm */
   armLength?: number;
+  /** oscillating followers: the cam-pivot-to-follower-pivot line always
+   *  has *two* points at the roller's required reach; which one is the
+   *  mechanically sane arm pose (not crossed through the cam) depends on
+   *  which side of that line the follower was actually built on. +1 picks
+   *  the point counter-clockwise from cam pivot to follower pivot, -1 the
+   *  clockwise one. Only matters for disambiguating the very first solve
+   *  (every frame after tracks the continuous branch via the previous
+   *  frame's position) - same idea as Cam.profile.requiredDirection.
+   *  Defaults to +1. */
+  armSide?: 1 | -1;
   /** Optional joint id exposing this follower's roller-center as a pin so
    *  downstream Linkages can key off the follower's motion (e.g. a cam
    *  driving a rocker through a follower rod). */
@@ -184,14 +202,14 @@ export interface Follower extends BaseComponentFields {
 // kinematics/collision.ts.
 // ---------------------------------------------------------------------------
 
-export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc' | 'pinwheel';
+export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc' | 'pinwheel' | 'bird-body' | 'foot';
 
 export interface Figure extends BaseComponentFields {
   kind: 'figure';
   shape: FigureShapeKind;
   /** The joint whose solved world position this figure rides on every frame.
-   *  Mutually exclusive with `attachComponentId` - use this for anything
-   *  riding a Linkage/Follower pin. */
+   *  Mutually exclusive with `attachComponentId`/`staticPosition` - use
+   *  this for anything riding a Linkage/Follower pin. */
   attachJointId?: string;
   /** A second joint used to derive a facing/rotation angle (e.g. the far end
    *  of the link the figure is glued to), so the figure visibly orients
@@ -203,12 +221,36 @@ export interface Figure extends BaseComponentFields {
    *  coaxially with a gear or cam (e.g. a pinwheel), which has no second
    *  moving point to derive a facing angle from the way a Linkage pin
    *  does. World position is that component's pivot. Mutually exclusive
-   *  with `attachJointId`. */
+   *  with `attachJointId`/`staticPosition`. */
   attachComponentId?: string;
-  /** Offset from the attach joint in the figure's own local frame, mm. */
+  /** A fixed world position for a non-moving decorative part (a body/base/
+   *  foot the box carries but the mechanism doesn't drive) - real automata
+   *  are mostly static figure with one or two moving parts, not everything
+   *  in motion. Mutually exclusive with `attachJointId`/`attachComponentId`. */
+  staticPosition?: Point2D;
+  /** Offset from the attach joint in the figure's own local frame, mm -
+   *  rotates with the joint's facing angle when `orientationJointId` (or a
+   *  spinning `attachComponentId`) is set, so it's for small local
+   *  adjustments, not standing height. */
   localOffset: Point2D;
+  /** A fixed, *unrotated* lift in world-Y (screen-up) applied after
+   *  everything else, mm - how far this figure stands above its driving
+   *  joint's own position. Real automata elevate the performer on a lid
+   *  well above the mechanism (a cat's hip pin is inches above the cam
+   *  that drives it); without this, a driven figure could only be as high
+   *  as the mechanism's own motion happened to reach, which is why heads/
+   *  bodies used to sit right on top of - and hide - their crank. Ignored
+   *  for figures with no attach point (nothing to elevate above). */
+  elevationMm?: number;
   /** Overall size, mm. */
   scale: number;
+  /** If set and this figure rides `attachJointId`/`attachComponentId`, a
+   *  painted-dowel rod is drawn from that joint/component's own solved
+   *  scene position up to wherever this figure ends up (after localOffset
+   *  and elevationMm) - the visible "push-rod" connecting the mechanism
+   *  to the character (see docs/AUTOMATON_VISUAL_DESIGN_SPEC.md). Omit for
+   *  figures that sit flush with their driving joint (no gap to bridge). */
+  showConnectingRod?: boolean;
 }
 
 export type Component = Linkage | Gear | Cam | Follower | Figure;
