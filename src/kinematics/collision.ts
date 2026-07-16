@@ -68,6 +68,9 @@ export function buildCollisionShapes(assembly: AssemblyTree, solve: SolveResult)
       if (!out) return [];
       return [{ componentId: component.id, zIndex: component.zIndex, kind: 'circle', center: out.position, radius: component.rollerRadius }];
     }
+    // Figures (decorative performers) are intentionally excluded: they're
+    // meant to sit in front of/above the mechanism they're glued to, not be
+    // flagged as colliding with it.
     return [];
   }
 }

@@ -41,11 +41,19 @@ npm run lint      # oxlint
   `cam-follower` (Grubler J2, 2-DoF higher pairs).
 - `component.ts` - `Linkage` (rigid bar/plate with N pinned points),
   `Gear` (involute spur gear params), `Cam` (radial profile), `Follower`
-  (translating or oscillating cam follower).
+  (translating or oscillating cam follower), and `Figure` - the part that
+  actually makes something an *automaton* rather than a bare mechanism: a
+  decorative performer (bird head, wing, ...) glued to a moving joint,
+  inheriting its solved position/orientation with zero added DoF. Real
+  automata (per Cabaret Mechanical Theatre / Exploratorium's cardboard
+  automata guides) are always a hidden cam/crank mechanism driving a
+  visible performer on top - `Figure` is that visible layer.
 - `assembly.ts` - `AssemblyTree`: the whole mechanism as components + joints
-  + a single `DriverInput.theta`, plus `ValidationResult` types for the red
-  flagging Phase 2 requires (Grubler failure, solver singularity/non
-  convergence, planar collision).
+  + a single `DriverInput.theta`, plus `StageConfig` (the base/box the
+  mechanism hides in and the hand-crank handle a viewer actually turns -
+  presentation only, never touches the solver), plus `ValidationResult`
+  types for the red flagging Phase 2 requires (Grubler failure, solver
+  singularity/non convergence, planar collision).
 
 ### Kinematic solver (`src/kinematics/solver.ts`)
 
@@ -99,21 +107,27 @@ for continuity/stability across the animation sweep), and exposes
 play/pause/scrub actions consumed by `src/sandbox/ControlPanel.tsx`.
 
 `src/store/demoAssembly.ts` is a worked example exercising every component
-kind in one valid 1-DoF assembly: a Grashof crank-rocker four-bar sharing
-its input shaft with a 20:40 reduction gear pair, which carries a cam
-driving a translating follower. It's a good reference for wiring up a new
-mechanism by hand before there's a component-authoring UI.
+kind in one valid 1-DoF assembly, built as an actual bird automaton rather
+than a bare test rig: a Grashof crank-rocker four-bar sharing its input
+shaft with a 20:40 reduction gear pair, which carries a cam driving a
+translating follower - a bird-head `Figure` bobs on that follower (pecking
+motion) and a wing `Figure` is hinged at the rocker's fixed pivot, swept by
+the rocker's own oscillation (flapping motion). It's a good reference for
+wiring up a new mechanism by hand before there's a component-authoring UI.
 
 ### Sandbox (`src/sandbox/`)
 
 `SandboxCanvas.tsx` sweeps `theta` every frame via `useFrame` while
 `assembly.driver.isPlaying`, and renders each component kind
-(`LinkageMesh`, `GearMesh`, `CamMesh`, `FollowerMesh`) from the solver's
-per-joint world positions. `zIndex` maps to a z-offset in scene units so
-stacked layers are visually legible. `ValidationPanel.tsx` shows the live
-Grubler breakdown and turns any component implicated in a solver
-singularity or planar collision red (`highlighted` prop threaded through
-every mesh component).
+(`LinkageMesh`, `GearMesh`, `CamMesh`, `FollowerMesh`, `FigureMesh`) from
+the solver's per-joint world positions, plus `StageMesh` for the base
+platform and spinning hand-crank handle. `zIndex` maps to a z-offset in
+scene units so stacked layers are visually legible - Figures default to a
+higher `zIndex` than the mechanism they ride on, so the performer reads as
+sitting above the (still-visible, for the simulator's own sake) hidden
+works. `ValidationPanel.tsx` shows the live Grubler breakdown and turns any
+component implicated in a solver singularity or planar collision red
+(`highlighted` prop threaded through every mesh component).
 
 ## Roadmap: Phases 3-4
 

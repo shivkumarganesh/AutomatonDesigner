@@ -2,11 +2,13 @@ import { Suspense, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
 import { useAssemblyStore } from '../store/assemblyStore';
-import { isCam, isFollower, isGear, isLinkage } from '../types/component';
+import { isCam, isFigure, isFollower, isGear, isLinkage } from '../types/component';
 import { GearMesh } from './GearMesh';
 import { CamMesh } from './CamMesh';
 import { LinkageMesh } from './LinkageMesh';
 import { FollowerMesh } from './FollowerMesh';
+import { FigureMesh } from './FigureMesh';
+import { StageMesh } from './StageMesh';
 import { toScenePosition, mmToUnits } from './scene';
 
 function AnimationDriver() {
@@ -98,21 +100,40 @@ function AssemblyContents() {
             />
           );
         }
+        if (isFigure(component)) {
+          return (
+            <FigureMesh
+              key={component.id}
+              figure={component}
+              positions={solveResult.positions}
+              highlighted={highlightedIds.has(component.id)}
+            />
+          );
+        }
         return null;
       })}
     </>
   );
 }
 
+function Stage() {
+  const stage = useAssemblyStore((s) => s.assembly.stage);
+  const theta = useAssemblyStore((s) => s.assembly.driver.theta);
+  const crankPivot = useAssemblyStore((s) => (stage ? s.solveResult.positions[stage.crankJointId] : undefined));
+  if (!stage || !crankPivot) return null;
+  return <StageMesh stage={stage} crankPivot={crankPivot} theta={theta} />;
+}
+
 export function SandboxCanvas() {
   return (
-    <Canvas shadows camera={{ position: [0, -20, 24], fov: 45, up: [0, 0, 1] }}>
+    <Canvas shadows camera={{ position: [2, -48, 26], fov: 42, up: [0, 0, 1] }}>
       <color attach="background" args={['#12141a']} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, -10, 20]} intensity={1.1} castShadow />
       <Suspense fallback={null}>
         <AnimationDriver />
         <GroundPivots />
+        <Stage />
         <AssemblyContents />
       </Suspense>
       <Grid
@@ -124,7 +145,7 @@ export function SandboxCanvas() {
         fadeDistance={60}
         rotation={[Math.PI / 2, 0, 0]}
       />
-      <OrbitControls makeDefault target={[3, 0, 0]} />
+      <OrbitControls makeDefault target={[4, -10, 3]} />
     </Canvas>
   );
 }

@@ -21,6 +21,25 @@ export interface CanvasSize {
 }
 
 /**
+ * The base/box every real automaton hides its mechanism inside, with a
+ * hand crank poking out one side - the only two things a viewer of the
+ * finished piece actually sees are this box (plus the Figures riding on
+ * top of it) and the crank they turn. Purely presentational: it carries no
+ * joints or DoF and never participates in the solver.
+ */
+export interface StageConfig {
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  /** Center of the base platform's footprint, mm, in mechanism XY space. */
+  originMm: { x: number; y: number };
+  /** The grounded joint the visible crank handle is drawn spinning from
+   *  (normally the input crank's ground pivot). */
+  crankJointId: string;
+  crankHandleLengthMm: number;
+}
+
+/**
  * The full assembly state tree. Link #1 in Grubler's equation is always
  * the ground frame, represented implicitly by `groundJointIds` rather than
  * as its own Component - every joint whose id appears here is treated as
@@ -36,6 +55,7 @@ export interface AssemblyTree {
   materialDefaults: MaterialSpec;
   kerf: KerfConfig;
   canvasSize: CanvasSize;
+  stage?: StageConfig;
 }
 
 export function createEmptyAssembly(name = 'Untitled Automaton'): AssemblyTree {

@@ -40,14 +40,25 @@ export function computeGrueblerDof(assembly: AssemblyTree): GrueblerBreakdown {
     if (ra !== rb) parent.set(ra, rb);
   };
 
-  for (const id of Object.keys(assembly.components)) find(id);
+  // Figures (decorative performers glued to a moving joint - the bird/wing/
+  // etc. an automaton actually shows) add zero DoF of their own, same as
+  // being welded on: they're excluded from the link count entirely rather
+  // than merged in, since they don't carry their own set of pin points.
+  const kinematicIds = Object.entries(assembly.components)
+    .filter(([, c]) => c.kind !== 'figure')
+    .map(([id]) => id);
+
+  for (const id of kinematicIds) find(id);
   for (const joint of Object.values(assembly.joints)) {
     if (joint.type === 'fixed' && joint.componentIds.length === 2) {
-      union(joint.componentIds[0], joint.componentIds[1]);
+      const [a, b] = joint.componentIds;
+      if (assembly.components[a]?.kind !== 'figure' && assembly.components[b]?.kind !== 'figure') {
+        union(a, b);
+      }
     }
   }
 
-  const distinctLinks = new Set(Object.keys(assembly.components).map((id) => find(id)));
+  const distinctLinks = new Set(kinematicIds.map((id) => find(id)));
   const links = 1 + distinctLinks.size;
 
   let j1 = 0;

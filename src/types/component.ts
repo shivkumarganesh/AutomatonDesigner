@@ -1,7 +1,7 @@
 import type { Point2D } from './geometry';
 import type { MaterialSpec, FitType } from './material';
 
-export type ComponentKind = 'linkage' | 'gear' | 'cam' | 'follower';
+export type ComponentKind = 'linkage' | 'gear' | 'cam' | 'follower' | 'figure';
 
 interface BaseComponentFields {
   id: string;
@@ -147,7 +147,37 @@ export interface Follower extends BaseComponentFields {
   solved?: { displacement: number; position: Point2D; rotation?: number };
 }
 
-export type Component = Linkage | Gear | Cam | Follower;
+// ---------------------------------------------------------------------------
+// Figure - the whole point of an automaton: a decorative performer (bird,
+// animal, character part) rigidly glued to a moving joint so it inherits
+// that joint's solved motion. This is what separates an "automaton" from a
+// bare test rig - per Cabaret Mechanical Theatre / Exploratorium references,
+// every automaton is a hidden mechanism driving a visible performer on top.
+//
+// A Figure adds zero DoF of its own (it's glued on, like a fixed joint would
+// be) so it is intentionally excluded from Grubler's N count and from
+// planar-collision checking - see kinematics/gruebler.ts and
+// kinematics/collision.ts.
+// ---------------------------------------------------------------------------
+
+export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc';
+
+export interface Figure extends BaseComponentFields {
+  kind: 'figure';
+  shape: FigureShapeKind;
+  /** The joint whose solved world position this figure rides on every frame. */
+  attachJointId: string;
+  /** A second joint used to derive a facing/rotation angle (e.g. the far end
+   *  of the link the figure is glued to), so the figure visibly orients
+   *  itself with the mechanism instead of staying axis-aligned. */
+  orientationJointId?: string;
+  /** Offset from the attach joint in the figure's own local frame, mm. */
+  localOffset: Point2D;
+  /** Overall size, mm. */
+  scale: number;
+}
+
+export type Component = Linkage | Gear | Cam | Follower | Figure;
 
 export function isLinkage(c: Component): c is Linkage {
   return c.kind === 'linkage';
@@ -160,4 +190,7 @@ export function isCam(c: Component): c is Cam {
 }
 export function isFollower(c: Component): c is Follower {
   return c.kind === 'follower';
+}
+export function isFigure(c: Component): c is Figure {
+  return c.kind === 'figure';
 }

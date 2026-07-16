@@ -1,5 +1,5 @@
 import type { AssemblyTree } from '../types/assembly';
-import type { Cam, Follower, Gear, Linkage } from '../types/component';
+import type { Cam, Figure, Follower, Gear, Linkage } from '../types/component';
 import type { CamFollowerJoint, FixedJoint, GearMeshJoint, PrismaticJoint, RevoluteJoint } from '../types/joint';
 import { DEFAULT_KERF, DEFAULT_MATERIAL } from '../types/material';
 
@@ -205,11 +205,52 @@ export function createDemoAssembly(): AssemblyTree {
     axis: { x: 0, y: 1 },
     axisAnchor: { x: 0, y: -60 },
     rollerRadius: 3,
+    // Exposes the roller-center as a plain lookup key in the solver's
+    // position map (see solveAssembly step 3) so the bird head Figure below
+    // can ride on it - it isn't a real Joint, nothing else references it.
+    outputJointId: 'follower1-out',
+  };
+
+  // The performer: what actually makes this an *automaton* rather than a
+  // bare mechanism (see README) - a bird head that bobs on the follower rod
+  // (pecking motion) and a wing hinged at the rocker's fixed pivot, swept by
+  // the rocker's own oscillation. Neither adds DoF: see gruebler.ts / the
+  // 'figure' exclusion there.
+  const birdHead: Figure = {
+    id: 'birdHead',
+    name: 'Bird Head',
+    kind: 'figure',
+    // A z-plane above everything else it rides near (cam=2, gearOut=1) so
+    // the performer visibly floats in front of the mechanism that drives
+    // it, the way a finished automaton's figure sits above its hidden works.
+    zIndex: 4,
+    material,
+    fit: 'press-fit',
+    color: '#e76f51',
+    shape: 'bird-head',
+    attachJointId: 'follower1-out',
+    localOffset: { x: 0, y: 24 },
+    scale: 18,
+  };
+
+  const wing: Figure = {
+    id: 'wing1',
+    name: 'Flapping Wing',
+    kind: 'figure',
+    zIndex: 4,
+    material,
+    fit: 'press-fit',
+    color: '#3d5a80',
+    shape: 'wing',
+    attachJointId: 'joint-D',
+    orientationJointId: 'joint-C',
+    localOffset: { x: 0, y: 0 },
+    scale: 42,
   };
 
   const assembly: AssemblyTree = {
     id: 'demo-assembly',
-    name: 'Demo: Crank-Rocker + Geared Cam',
+    name: 'Demo: Pecking, Winking Bird Automaton',
     groundJointIds: ['joint-A', 'joint-D', 'joint-G2'],
     components: {
       crank,
@@ -219,6 +260,8 @@ export function createDemoAssembly(): AssemblyTree {
       gearOut,
       cam1,
       follower1: follower,
+      birdHead,
+      wing1: wing,
     },
     joints: {
       [jointA.id]: jointA,
@@ -236,6 +279,14 @@ export function createDemoAssembly(): AssemblyTree {
     materialDefaults: DEFAULT_MATERIAL,
     kerf: DEFAULT_KERF,
     canvasSize: { width: 300, height: 500 },
+    stage: {
+      widthMm: 260,
+      depthMm: 220,
+      heightMm: 20,
+      originMm: { x: 40, y: -25 },
+      crankJointId: 'joint-A',
+      crankHandleLengthMm: 32,
+    },
   };
 
   return assembly;
