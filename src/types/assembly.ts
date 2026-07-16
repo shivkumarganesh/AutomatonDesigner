@@ -83,7 +83,8 @@ export type ValidationCode =
   | 'solver-singularity'
   | 'solver-no-convergence'
   | 'planar-collision'
-  | 'unresolved-reference';
+  | 'unresolved-reference'
+  | 'wrong-drive-direction';
 
 export interface ValidationIssue {
   code: ValidationCode;

@@ -2,21 +2,23 @@ import type { AssemblyTree } from '../types/assembly';
 import type { Cam, Figure, Follower, Gear, Linkage } from '../types/component';
 import type { CamFollowerJoint, FixedJoint, GearMeshJoint, PrismaticJoint, RevoluteJoint } from '../types/joint';
 import { DEFAULT_KERF, DEFAULT_MATERIAL } from '../types/material';
+import { createParallelMotionPair } from '../kinematics/mechanismFactories';
 
 /**
  * A worked example exercising every Phase 1 component type in one 1-DoF
  * assembly, driven by a single crank:
  *
  *   input shaft (crank + keyed pinion gear)
- *     |-- crank pin -> coupler -> rocker         (Grashof crank-rocker four-bar)
- *     `-- pinion meshes 20:40 into a driven gear  (2:1 reduction)
- *          `-- a cam keyed to that same shaft drives a translating follower
+ *     |-- crank pin -> coupler -> rocker            (Grashof crank-rocker four-bar)
+ *     |    `-- rocker's outer pin also drives a parallelogram
+ *     |        six-bar (createParallelMotionPair) mirroring its angle
+ *     |        onto a second rocker, so both wing Figures flap in sync
+ *     `-- pinion meshes 20:40 into a driven gear     (2:1 reduction)
+ *          `-- a pear-dwell cam keyed to that shaft drives a translating
+ *              follower (bird head bob: dwell, peck down, dwell, back up)
  *
- * Grubler check: 4 independent links (crank+pinion, coupler, rocker,
- * gear+cam) + ground, 5 lower pairs (2 ground pivots, 2 coupler pins, 1
- * cam-follower... see below) - the exact breakdown is asserted in
- * gruebler.test-worthy comments inline, and surfaced live in the sandbox
- * validation panel.
+ * See docs/MECHANISM_TAXONOMY_SPEC.md for the mechanism catalog this is
+ * drawn from and the Grubler DoF math for the parallel-motion addition.
  */
 export function createDemoAssembly(): AssemblyTree {
   const material = DEFAULT_MATERIAL;
@@ -41,7 +43,10 @@ export function createDemoAssembly(): AssemblyTree {
     id: 'joint-C',
     type: 'revolute',
     zIndex: 0,
-    componentIds: ['coupler', 'rocker'],
+    // 'wing2-coupler' (added below via createParallelMotionPair) also
+    // pins here - 3 bodies sharing one point is 2 independent pin-pairs,
+    // not 1, which is why gruebler.ts weights J1 by (bodyCount - 1).
+    componentIds: ['coupler', 'rocker', 'wing2-coupler'],
     position: { x: 67.32, y: 44.56 },
     grounded: false,
   };
@@ -189,7 +194,11 @@ export function createDemoAssembly(): AssemblyTree {
     pivotJointId: 'joint-G2',
     drivenByMeshJointId: 'mesh-1',
     rotationOffset: 0,
-    profile: { kind: 'constant-rise-fall', baseRadius: 15, lift: 10 },
+    // Dwell-rise-dwell-fall-dwell: the head holds still, pecks down,
+    // holds at the bottom, then rises back - a real pause a viewer reads
+    // as intentional, not the smoother dwell-less rise/fall of
+    // 'constant-rise-fall'. See MECHANISM_TAXONOMY_SPEC.md Section 2.1.
+    profile: { kind: 'pear-dwell', baseRadius: 15, lift: 10 },
   };
 
   const follower: Follower = {
@@ -235,7 +244,7 @@ export function createDemoAssembly(): AssemblyTree {
 
   const wing: Figure = {
     id: 'wing1',
-    name: 'Flapping Wing',
+    name: 'Left Wing',
     kind: 'figure',
     zIndex: 4,
     material,
@@ -248,10 +257,42 @@ export function createDemoAssembly(): AssemblyTree {
     scale: 42,
   };
 
+  // Both wings flap in exact sync: rather than a second Figure faking it
+  // off the same joint-C angle, this mirrors the rocker's actual motion
+  // through a genuine parallelogram four-bar (ground link = new coupler
+  // length, both rockers = 50mm) - see MECHANISM_TAXONOMY_SPEC.md 2.3 and
+  // kinematics/mechanismFactories.ts.
+  const wing2Mechanism = createParallelMotionPair({
+    idPrefix: 'wing2',
+    referencePivot: jointD.position,
+    referenceOuterJointId: 'joint-C',
+    referenceOuterPosition: jointC.position,
+    armLength: 50,
+    newPivot: { x: 150, y: 0 },
+    zIndex: 0,
+    material,
+    fit: 'clearance',
+  });
+
+  const wing2: Figure = {
+    id: 'wing2',
+    name: 'Right Wing',
+    kind: 'figure',
+    zIndex: 4,
+    material,
+    fit: 'press-fit',
+    color: '#3d5a80',
+    shape: 'wing',
+    attachJointId: wing2Mechanism.pivotJointId,
+    orientationJointId: wing2Mechanism.outputJointId,
+    localOffset: { x: 0, y: 0 },
+    scale: 42,
+  };
+
   const assembly: AssemblyTree = {
     id: 'demo-assembly',
-    name: 'Demo: Pecking, Winking Bird Automaton',
-    groundJointIds: ['joint-A', 'joint-D', 'joint-G2'],
+    name: 'Demo: Pecking Bird Automaton, Wings in Sync',
+    groundJointIds: ['joint-A', 'joint-D', 'joint-G2', ...wing2Mechanism.groundJointIds],
     components: {
       crank,
       coupler,
@@ -262,6 +303,8 @@ export function createDemoAssembly(): AssemblyTree {
       follower1: follower,
       birdHead,
       wing1: wing,
+      wing2,
+      ...wing2Mechanism.components,
     },
     joints: {
       [jointA.id]: jointA,
@@ -274,6 +317,7 @@ export function createDemoAssembly(): AssemblyTree {
       [meshJoint1.id]: meshJoint1,
       [followerSlider.id]: followerSlider,
       [camFollowerJoint.id]: camFollowerJoint,
+      ...wing2Mechanism.joints,
     },
     driver: { theta: 0, omega: 1, isPlaying: true },
     materialDefaults: DEFAULT_MATERIAL,

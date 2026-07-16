@@ -64,8 +64,19 @@ export function computeGrueblerDof(assembly: AssemblyTree): GrueblerBreakdown {
   let j1 = 0;
   let j2 = 0;
   for (const joint of Object.values(assembly.joints)) {
-    if (joint.type === 'revolute' || joint.type === 'prismatic') j1 += 1;
-    else if (isHigherPair(joint.type)) j2 += 1;
+    if (joint.type === 'revolute' || joint.type === 'prismatic') {
+      // A joint pinning k bodies together at one shared point is k-1
+      // independent pin-pairs, not one - two bodies sharing a pin is the
+      // normal case (weight 1), but a third body pinned at that same
+      // point (e.g. a parallel-motion coupler sharing an existing pin)
+      // removes another 2 DoF on top of that, same as if it were its own
+      // separate joint. Grounded joints have an implicit extra body (the
+      // frame) not listed in componentIds, so it isn't subtracted there.
+      const bodyCount = joint.componentIds.length + (joint.grounded ? 1 : 0);
+      j1 += Math.max(1, bodyCount - 1);
+    } else if (isHigherPair(joint.type)) {
+      j2 += 1;
+    }
   }
 
   const dof = 3 * (links - 1) - 2 * j1 - j2;

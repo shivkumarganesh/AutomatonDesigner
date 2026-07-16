@@ -93,7 +93,13 @@ export interface Gear extends BaseComponentFields {
 // Cam - plate cam with an arbitrary radial profile.
 // ---------------------------------------------------------------------------
 
-export type CamProfileKind = 'circular-eccentric' | 'constant-rise-fall' | 'heart' | 'custom-samples';
+export type CamProfileKind =
+  | 'circular-eccentric'
+  | 'constant-rise-fall'
+  | 'heart'
+  | 'custom-samples'
+  | 'pear-dwell'
+  | 'snail-drop';
 
 export interface CamProfile {
   kind: CamProfileKind;
@@ -105,6 +111,24 @@ export interface CamProfile {
   lift?: number;
   /** Explicit radius samples (mm) evenly spaced over [0, 2*PI), for 'custom-samples'. */
   samples?: number[];
+  /** 'pear-dwell': fraction of the turn (0-1, in order) spent at base
+   *  radius before rising, rising, holding at peak, and falling. The
+   *  remainder returns to/stays at base radius - a true dwell-rise-dwell-
+   *  fall-dwell cam, unlike the dwell-less 'constant-rise-fall'. */
+  dwellLowFraction?: number;
+  riseFraction?: number;
+  dwellHighFraction?: number;
+  fallFraction?: number;
+  /** 'snail-drop': fraction of the turn (0-1) taken by the near-instant
+   *  drop back to base radius; the remaining (1 - dropFraction) is a slow
+   *  steady rise. Only meaningful driven in `requiredDirection` - running
+   *  it backward drags the follower into the drop edge instead of over
+   *  the rise, which the validator flags (see ValidationCode). */
+  dropFraction?: number;
+  /** +1 = must be driven with theta increasing, -1 = decreasing. Only
+   *  'snail-drop' cams are direction-sensitive; other profiles are
+   *  symmetric enough to ignore this. */
+  requiredDirection?: 1 | -1;
 }
 
 export interface Cam extends BaseComponentFields {

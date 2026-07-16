@@ -3,10 +3,11 @@ import type { AssemblyTree, ValidationResult } from '../types/assembly';
 import { solveAssembly, type SolveResult } from '../kinematics/solver';
 import { computeGrueblerDof, validateGrueblerDof } from '../kinematics/gruebler';
 import { detectPlanarCollisions } from '../kinematics/collision';
+import { validateDriveDirections } from '../kinematics/directionCheck';
 import { createDemoAssembly } from './demoAssembly';
 
 function runValidation(assembly: AssemblyTree, solveResult: SolveResult): ValidationResult {
-  const issues = [...validateGrueblerDof(assembly)];
+  const issues = [...validateGrueblerDof(assembly), ...validateDriveDirections(assembly)];
 
   const collisions = detectPlanarCollisions(assembly, solveResult);
   for (const collision of collisions) {

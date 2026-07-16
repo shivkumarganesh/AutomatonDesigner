@@ -50,6 +50,41 @@ export function camProfileRadius(profile: CamProfile, phi: number): number {
       const frac = fpos - Math.floor(fpos);
       return samples[i0] * (1 - frac) + samples[i1] * frac;
     }
+    case 'pear-dwell': {
+      // The classic paper/card-automata cam: hold still, rise, hold still
+      // at the peak, fall, hold still again - the dwell segments are what
+      // read to a viewer as an intentional pause rather than a wobble.
+      const lift = profile.lift ?? profile.baseRadius * 0.6;
+      const dwellLow = profile.dwellLowFraction ?? 0.15;
+      const rise = profile.riseFraction ?? 0.25;
+      const dwellHigh = profile.dwellHighFraction ?? 0.15;
+      const fall = profile.fallFraction ?? 0.25;
+      const riseStart = dwellLow;
+      const riseEnd = riseStart + rise;
+      const peakEnd = riseEnd + dwellHigh;
+      const fallEnd = peakEnd + fall;
+
+      if (unit < riseStart) return profile.baseRadius;
+      if (unit < riseEnd) return profile.baseRadius + lift * smoothstep((unit - riseStart) / rise);
+      if (unit < peakEnd) return profile.baseRadius + lift;
+      if (unit < fallEnd) return profile.baseRadius + lift * (1 - smoothstep((unit - peakEnd) / fall));
+      return profile.baseRadius;
+    }
+    case 'snail-drop': {
+      // A steady, near-linear creep up to peak radius over most of the
+      // turn, then an abrupt drop back to base over a short window - a
+      // one-directional "sudden fall" gag cam. Running it the wrong way
+      // drags the follower up the drop edge instead of the rise; see
+      // ValidationCode 'wrong-drive-direction'.
+      const lift = profile.lift ?? profile.baseRadius * 0.7;
+      const dropFraction = profile.dropFraction ?? 0.08;
+      const riseSpan = 1 - dropFraction;
+      if (unit < riseSpan) {
+        return profile.baseRadius + lift * (unit / riseSpan);
+      }
+      const u = (unit - riseSpan) / dropFraction;
+      return profile.baseRadius + lift * (1 - u);
+    }
   }
 }
 

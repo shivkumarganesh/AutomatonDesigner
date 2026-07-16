@@ -10,6 +10,12 @@ and **Phase 2 (React Three Fiber sandbox with live validation)**. Phases 3
 (nesting/export) and 4 (assembly instructions) are scaffolded architecturally
 below but not yet implemented - see [Roadmap](#roadmap-phases-3-4).
 
+See `docs/MECHANISM_TAXONOMY_SPEC.md` for the automata mechanism research
+(cam shapes, crank/linkage family, gear-family mechanisms) this app's
+mechanism coverage is being built out against, and a gap analysis of
+what's implemented vs. still missing (rack-and-pinion, Geneva drive,
+slotted-disk bell crank).
+
 ## Stack
 
 - **React 19** + TypeScript, Vite build
@@ -92,12 +98,44 @@ bars, circles for gears/cams/followers) per component and flags any
 same-`zIndex` pair that overlaps and doesn't share a joint (Section 2.D:
 mechanisms are 2.5D, and parts sharing a z-plane must not collide).
 
+One subtlety the Grubler counter has to get right: a single joint can pin
+*more* than two bodies at one shared point (e.g. a parallel-motion coupler
+attaching to an existing pin - see below). A joint connecting `k` bodies at
+one point is `k-1` independent pin-pairs, not a flat 1, or the DoF count
+silently under-counts as soon as a third body joins an existing pin.
+
+`src/kinematics/mechanismFactories.ts` has reusable builders for the rest
+of the crank-linkage family cataloged in `docs/MECHANISM_TAXONOMY_SPEC.md`
+Section 2.3 - none need new data-model types, they're all buildable from
+existing `Linkage`/`PrismaticJoint`/`RevoluteJoint` pieces, just fiddly to
+hand-wire every time: `createCrankSlider` (piston mechanism, reuses the
+existing prismatic line constraint), `createBellCrank` (a 3-point
+Linkage), and `createParallelMotionPair` (a parallelogram four-bar that
+mirrors an existing rocker's *exact* absolute angle onto a second rocker -
+the real way automata sync two wings, used by the demo assembly below).
+
 ### Involute gear math (`src/geometry/involute.ts`)
 
 Standard metric-module equations (`pitchDiameter = module * teeth`, base/tip/
 root diameters from pressure angle + profile shift + tip clearance) plus a
 sampled involute-curve tooth profile generator (`generateGearOutline`) used
 for both the 3D sandbox render and, ultimately, the Phase 3 exporter.
+
+### Cam profiles (`src/geometry/cam.ts`)
+
+`camProfileRadius(profile, phi)` covers the shapes cataloged in
+`MECHANISM_TAXONOMY_SPEC.md` Section 2.1: `'circular-eccentric'` (smooth,
+no dwell), `'constant-rise-fall'` and `'heart'` (dwell-less rise/fall,
+`heart` piecewise-linear for constant follower velocity),
+`'pear-dwell'` (explicit dwell-rise-dwell-fall-dwell, the classic
+paper/card-automata shape), `'snail-drop'` (steady creeping rise + a
+near-instant drop, one-directional only), and `'custom-samples'`. Only
+`'snail-drop'` is direction-sensitive - `CamProfile.requiredDirection` is
+checked against the driver's actual composed rotation direction (through
+whatever gear train sits upstream) by
+`src/kinematics/directionCheck.ts`, surfaced as a `'wrong-drive-direction'`
+validation warning rather than an error, since running it backward doesn't
+break the solver, it just isn't what the cam was designed for.
 
 ### Zustand store (`src/store/assemblyStore.ts`)
 
@@ -109,11 +147,15 @@ play/pause/scrub actions consumed by `src/sandbox/ControlPanel.tsx`.
 `src/store/demoAssembly.ts` is a worked example exercising every component
 kind in one valid 1-DoF assembly, built as an actual bird automaton rather
 than a bare test rig: a Grashof crank-rocker four-bar sharing its input
-shaft with a 20:40 reduction gear pair, which carries a cam driving a
-translating follower - a bird-head `Figure` bobs on that follower (pecking
-motion) and a wing `Figure` is hinged at the rocker's fixed pivot, swept by
-the rocker's own oscillation (flapping motion). It's a good reference for
-wiring up a new mechanism by hand before there's a component-authoring UI.
+shaft with a 20:40 reduction gear pair, which carries a `'pear-dwell'` cam
+(dwell - rise - dwell - fall - dwell, not the smoother dwell-less
+`'constant-rise-fall'`) driving a translating follower - a bird-head
+`Figure` pecks on that follower. The rocker's outer pin also drives a
+`createParallelMotionPair` six-bar mirroring its exact angle onto a second
+rocker, so a `Figure` wing on *each* rocker flaps in perfect sync off the
+one input - not two Figures faking synchrony off the same joint. It's a
+good reference for wiring up a new mechanism by hand before there's a
+component-authoring UI.
 
 ### Sandbox (`src/sandbox/`)
 
