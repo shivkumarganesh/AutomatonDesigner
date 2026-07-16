@@ -105,7 +105,8 @@ function AssemblyContents() {
             <FigureMesh
               key={component.id}
               figure={component}
-              positions={solveResult.positions}
+              assembly={assembly}
+              solveResult={solveResult}
               highlighted={highlightedIds.has(component.id)}
             />
           );
@@ -124,9 +125,28 @@ function Stage() {
   return <StageMesh stage={stage} crankPivot={crankPivot} theta={theta} />;
 }
 
+/** Auto-fits an initial camera pose to the current template's stage
+ *  footprint - templates range from a 160mm nodding head to a 260mm+
+ *  bird, so a single fixed camera pose only ever suits one of them. */
+function computeCameraPose(assembly: ReturnType<typeof useAssemblyStore.getState>['assembly']) {
+  const stage = assembly.stage;
+  const originUnits = stage ? { x: mmToUnits(stage.originMm.x), y: mmToUnits(stage.originMm.y) } : { x: 0, y: 0 };
+  const sizeUnits = stage ? mmToUnits(Math.max(stage.widthMm, stage.depthMm)) : 30;
+  const target: [number, number, number] = [originUnits.x, originUnits.y - sizeUnits * 0.05, sizeUnits * 0.1];
+  const dist = sizeUnits * 1.65;
+  const position: [number, number, number] = [originUnits.x - sizeUnits * 0.08, originUnits.y - dist * 0.85, dist * 0.55];
+  return { position, target };
+}
+
 export function SandboxCanvas() {
+  const assembly = useAssemblyStore((s) => s.assembly);
+  const { position, target } = computeCameraPose(assembly);
+
   return (
-    <Canvas shadows camera={{ position: [2, -48, 26], fov: 42, up: [0, 0, 1] }}>
+    // Keying on assembly.id remounts the Canvas (and its initial camera
+    // pose) whenever the selected template changes, since R3F's camera
+    // prop only ever applies once, on mount.
+    <Canvas key={assembly.id} shadows camera={{ position, fov: 42, up: [0, 0, 1] }}>
       <color attach="background" args={['#12141a']} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, -10, 20]} intensity={1.1} castShadow />
@@ -145,7 +165,7 @@ export function SandboxCanvas() {
         fadeDistance={60}
         rotation={[Math.PI / 2, 0, 0]}
       />
-      <OrbitControls makeDefault target={[4, -10, 3]} />
+      <OrbitControls makeDefault target={target} />
     </Canvas>
   );
 }

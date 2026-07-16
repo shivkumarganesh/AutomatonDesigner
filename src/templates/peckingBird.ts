@@ -1,84 +1,75 @@
 import type { AssemblyTree } from '../types/assembly';
-import type { Cam, Figure, Follower, Gear, Linkage } from '../types/component';
+import type { Cam, CamProfileKind, Figure, Follower, Gear, Linkage } from '../types/component';
 import type { CamFollowerJoint, FixedJoint, GearMeshJoint, PrismaticJoint, RevoluteJoint } from '../types/joint';
 import { DEFAULT_KERF, DEFAULT_MATERIAL } from '../types/material';
 import { createParallelMotionPair } from '../kinematics/mechanismFactories';
+import type { AutomatonTemplate, TemplateParamField, TemplateParams } from './types';
+import { numParam, strParam } from './types';
+
+const CAM_PROFILE: TemplateParamField = {
+  key: 'camProfile',
+  label: 'Cam profile',
+  kind: 'select',
+  default: 'pear-dwell',
+  options: [
+    { value: 'pear-dwell', label: 'Pear (dwell + peck)' },
+    { value: 'snail-drop', label: 'Snail (creep + drop)' },
+    { value: 'constant-rise-fall', label: 'Smooth rise/fall' },
+    { value: 'heart', label: 'Heart (constant velocity)' },
+  ],
+};
+const LIFT: TemplateParamField = { key: 'lift', label: 'Peck depth', kind: 'number', min: 4, max: 20, step: 1, default: 10, unit: 'mm' };
+const TEETH_OUT: TemplateParamField = { key: 'teethOut', label: 'Driven gear teeth', kind: 'number', min: 20, max: 60, step: 2, default: 40 };
+const WING_SPAN: TemplateParamField = { key: 'wingSpan', label: 'Wing span', kind: 'number', min: 24, max: 70, step: 2, default: 42, unit: 'mm' };
+const SPEED: TemplateParamField = { key: 'speed', label: 'Speed', kind: 'number', min: 0.2, max: 3, step: 0.1, default: 1, unit: 'rad/s' };
+const BODY_COLOR: TemplateParamField = { key: 'bodyColor', label: 'Body color', kind: 'color', default: '#e76f51' };
+const WING_COLOR: TemplateParamField = { key: 'wingColor', label: 'Wing color', kind: 'color', default: '#3d5a80' };
 
 /**
- * A worked example exercising every Phase 1 component type in one 1-DoF
- * assembly, driven by a single crank:
- *
- *   input shaft (crank + keyed pinion gear)
- *     |-- crank pin -> coupler -> rocker            (Grashof crank-rocker four-bar)
- *     |    `-- rocker's outer pin also drives a parallelogram
- *     |        six-bar (createParallelMotionPair) mirroring its angle
- *     |        onto a second rocker, so both wing Figures flap in sync
- *     `-- pinion meshes 20:40 into a driven gear     (2:1 reduction)
- *          `-- a pear-dwell cam keyed to that shaft drives a translating
- *              follower (bird head bob: dwell, peck down, dwell, back up)
- *
- * See docs/MECHANISM_TAXONOMY_SPEC.md for the mechanism catalog this is
- * drawn from and the Grubler DoF math for the parallel-motion addition.
+ * Crank-rocker four-bar sharing its input shaft with a reduction gear pair
+ * that drives a cam + translating follower - the bird head pecks, and the
+ * rocker's motion mirrors onto a second rocker via createParallelMotionPair
+ * so both wings flap in exact sync. See docs/MECHANISM_TAXONOMY_SPEC.md.
  */
-export function createDemoAssembly(): AssemblyTree {
+function build(params: TemplateParams): AssemblyTree {
   const material = DEFAULT_MATERIAL;
+  const teethIn = 20;
+  const teethOut = numParam(params, TEETH_OUT as TemplateParamField & { kind: 'number' });
+  const module = 2;
+  const centerDistance = (module * (teethIn + teethOut)) / 2;
+  const lift = numParam(params, LIFT as TemplateParamField & { kind: 'number' });
+  const camProfile = strParam(params, CAM_PROFILE as TemplateParamField & { kind: 'select' }) as CamProfileKind;
+  const wingSpan = numParam(params, WING_SPAN as TemplateParamField & { kind: 'number' });
+  const speed = numParam(params, SPEED as TemplateParamField & { kind: 'number' });
+  const bodyColor = strParam(params, BODY_COLOR as TemplateParamField & { kind: 'color' });
+  const wingColor = strParam(params, WING_COLOR as TemplateParamField & { kind: 'color' });
 
-  const jointA: RevoluteJoint = {
-    id: 'joint-A',
-    type: 'revolute',
-    zIndex: 0,
-    componentIds: ['crank'],
-    position: { x: 0, y: 0 },
-    grounded: true,
-  };
-  const jointB: RevoluteJoint = {
-    id: 'joint-B',
-    type: 'revolute',
-    zIndex: 0,
-    componentIds: ['crank', 'coupler'],
-    position: { x: 20, y: 0 },
-    grounded: false,
-  };
+  const jointA: RevoluteJoint = { id: 'joint-A', type: 'revolute', zIndex: 0, componentIds: ['crank'], position: { x: 0, y: 0 }, grounded: true };
+  const jointB: RevoluteJoint = { id: 'joint-B', type: 'revolute', zIndex: 0, componentIds: ['crank', 'coupler'], position: { x: 20, y: 0 }, grounded: false };
   const jointC: RevoluteJoint = {
     id: 'joint-C',
     type: 'revolute',
     zIndex: 0,
-    // 'wing2-coupler' (added below via createParallelMotionPair) also
-    // pins here - 3 bodies sharing one point is 2 independent pin-pairs,
-    // not 1, which is why gruebler.ts weights J1 by (bodyCount - 1).
     componentIds: ['coupler', 'rocker', 'wing2-coupler'],
     position: { x: 67.32, y: 44.56 },
     grounded: false,
   };
-  const jointD: RevoluteJoint = {
-    id: 'joint-D',
-    type: 'revolute',
-    zIndex: 0,
-    componentIds: ['rocker'],
-    position: { x: 90, y: 0 },
-    grounded: true,
-  };
+  const jointD: RevoluteJoint = { id: 'joint-D', type: 'revolute', zIndex: 0, componentIds: ['rocker'], position: { x: 90, y: 0 }, grounded: true };
   const jointG2: RevoluteJoint = {
     id: 'joint-G2',
     type: 'revolute',
     zIndex: 1,
     componentIds: ['gearOut'],
-    position: { x: 0, y: -60 },
+    position: { x: 0, y: -centerDistance },
     grounded: true,
   };
-  const fixedGearInToCrank: FixedJoint = {
-    id: 'fixed-gearIn-crank',
-    type: 'fixed',
-    zIndex: 1,
-    componentIds: ['crank', 'gearIn'],
-    position: { x: 0, y: 0 },
-  };
+  const fixedGearInToCrank: FixedJoint = { id: 'fixed-gearIn-crank', type: 'fixed', zIndex: 1, componentIds: ['crank', 'gearIn'], position: { x: 0, y: 0 } };
   const fixedCamToGearOut: FixedJoint = {
     id: 'fixed-cam-gearOut',
     type: 'fixed',
     zIndex: 1,
     componentIds: ['gearOut', 'cam1'],
-    position: { x: 0, y: -60 },
+    position: { x: 0, y: -centerDistance },
   };
   const meshJoint1: GearMeshJoint = {
     id: 'mesh-1',
@@ -87,19 +78,15 @@ export function createDemoAssembly(): AssemblyTree {
     componentIds: ['gearIn', 'gearOut'],
     driverId: 'gearIn',
     drivenId: 'gearOut',
-    ratio: -20 / 40,
+    ratio: -teethIn / teethOut,
     phaseOffset: 0,
   };
-
-  // The follower rod's 3 planar DoF are removed by exactly two pairs: a
-  // grounded prismatic joint (the rail it slides in, J1, -2 DoF) and the
-  // cam-follower contact itself (J2, -1 DoF) - see Grubler check below.
   const followerSlider: PrismaticJoint = {
     id: 'slider-follower1',
     type: 'prismatic',
     zIndex: 2,
     componentIds: ['follower1'],
-    anchor: { x: 0, y: -60 },
+    anchor: { x: 0, y: -centerDistance },
     axis: { x: 0, y: 1 },
     grounded: true,
   };
@@ -128,7 +115,6 @@ export function createDemoAssembly(): AssemblyTree {
       { jointId: 'joint-B', local: { x: 20, y: 0 } },
     ],
   };
-
   const coupler: Linkage = {
     id: 'coupler',
     name: 'Coupler',
@@ -142,7 +128,6 @@ export function createDemoAssembly(): AssemblyTree {
       { jointId: 'joint-C', local: { x: 65, y: 0 } },
     ],
   };
-
   const rocker: Linkage = {
     id: 'rocker',
     name: 'Rocker',
@@ -156,10 +141,9 @@ export function createDemoAssembly(): AssemblyTree {
       { jointId: 'joint-C', local: { x: 50, y: 0 } },
     ],
   };
-
   const gearIn: Gear = {
     id: 'gearIn',
-    name: 'Pinion (Z20)',
+    name: `Pinion (Z${teethIn})`,
     kind: 'gear',
     zIndex: 1,
     material,
@@ -167,12 +151,11 @@ export function createDemoAssembly(): AssemblyTree {
     color: '#e9c46a',
     pivotJointId: 'joint-A',
     isInputGear: true,
-    params: { teeth: 20, module: 2, pressureAngleDeg: 20, profileShift: 0, tipClearance: 0.25, boreDiameter: 5 },
+    params: { teeth: teethIn, module, pressureAngleDeg: 20, profileShift: 0, tipClearance: 0.25, boreDiameter: 5 },
   };
-
   const gearOut: Gear = {
     id: 'gearOut',
-    name: 'Driven Gear (Z40)',
+    name: `Driven Gear (Z${teethOut})`,
     kind: 'gear',
     zIndex: 1,
     material,
@@ -180,9 +163,8 @@ export function createDemoAssembly(): AssemblyTree {
     color: '#f4a261',
     pivotJointId: 'joint-G2',
     drivenByMeshJointId: 'mesh-1',
-    params: { teeth: 40, module: 2, pressureAngleDeg: 20, profileShift: 0, tipClearance: 0.25, boreDiameter: 5 },
+    params: { teeth: teethOut, module, pressureAngleDeg: 20, profileShift: 0, tipClearance: 0.25, boreDiameter: 5 },
   };
-
   const cam1: Cam = {
     id: 'cam1',
     name: 'Lift Cam',
@@ -194,13 +176,8 @@ export function createDemoAssembly(): AssemblyTree {
     pivotJointId: 'joint-G2',
     drivenByMeshJointId: 'mesh-1',
     rotationOffset: 0,
-    // Dwell-rise-dwell-fall-dwell: the head holds still, pecks down,
-    // holds at the bottom, then rises back - a real pause a viewer reads
-    // as intentional, not the smoother dwell-less rise/fall of
-    // 'constant-rise-fall'. See MECHANISM_TAXONOMY_SPEC.md Section 2.1.
-    profile: { kind: 'pear-dwell', baseRadius: 15, lift: 10 },
+    profile: { kind: camProfile, baseRadius: 15, lift, dropFraction: 0.08, requiredDirection: camProfile === 'snail-drop' ? 1 : undefined },
   };
-
   const follower: Follower = {
     id: 'follower1',
     name: 'Follower Rod',
@@ -212,36 +189,24 @@ export function createDemoAssembly(): AssemblyTree {
     motion: 'translating',
     camId: 'cam1',
     axis: { x: 0, y: 1 },
-    axisAnchor: { x: 0, y: -60 },
+    axisAnchor: { x: 0, y: -centerDistance },
     rollerRadius: 3,
-    // Exposes the roller-center as a plain lookup key in the solver's
-    // position map (see solveAssembly step 3) so the bird head Figure below
-    // can ride on it - it isn't a real Joint, nothing else references it.
     outputJointId: 'follower1-out',
   };
 
-  // The performer: what actually makes this an *automaton* rather than a
-  // bare mechanism (see README) - a bird head that bobs on the follower rod
-  // (pecking motion) and a wing hinged at the rocker's fixed pivot, swept by
-  // the rocker's own oscillation. Neither adds DoF: see gruebler.ts / the
-  // 'figure' exclusion there.
   const birdHead: Figure = {
     id: 'birdHead',
     name: 'Bird Head',
     kind: 'figure',
-    // A z-plane above everything else it rides near (cam=2, gearOut=1) so
-    // the performer visibly floats in front of the mechanism that drives
-    // it, the way a finished automaton's figure sits above its hidden works.
     zIndex: 4,
     material,
     fit: 'press-fit',
-    color: '#e76f51',
+    color: bodyColor,
     shape: 'bird-head',
     attachJointId: 'follower1-out',
     localOffset: { x: 0, y: 24 },
     scale: 18,
   };
-
   const wing: Figure = {
     id: 'wing1',
     name: 'Left Wing',
@@ -249,19 +214,14 @@ export function createDemoAssembly(): AssemblyTree {
     zIndex: 4,
     material,
     fit: 'press-fit',
-    color: '#3d5a80',
+    color: wingColor,
     shape: 'wing',
     attachJointId: 'joint-D',
     orientationJointId: 'joint-C',
     localOffset: { x: 0, y: 0 },
-    scale: 42,
+    scale: wingSpan,
   };
 
-  // Both wings flap in exact sync: rather than a second Figure faking it
-  // off the same joint-C angle, this mirrors the rocker's actual motion
-  // through a genuine parallelogram four-bar (ground link = new coupler
-  // length, both rockers = 50mm) - see MECHANISM_TAXONOMY_SPEC.md 2.3 and
-  // kinematics/mechanismFactories.ts.
   const wing2Mechanism = createParallelMotionPair({
     idPrefix: 'wing2',
     referencePivot: jointD.position,
@@ -273,7 +233,6 @@ export function createDemoAssembly(): AssemblyTree {
     material,
     fit: 'clearance',
   });
-
   const wing2: Figure = {
     id: 'wing2',
     name: 'Right Wing',
@@ -281,17 +240,17 @@ export function createDemoAssembly(): AssemblyTree {
     zIndex: 4,
     material,
     fit: 'press-fit',
-    color: '#3d5a80',
+    color: wingColor,
     shape: 'wing',
     attachJointId: wing2Mechanism.pivotJointId,
     orientationJointId: wing2Mechanism.outputJointId,
     localOffset: { x: 0, y: 0 },
-    scale: 42,
+    scale: wingSpan,
   };
 
-  const assembly: AssemblyTree = {
-    id: 'demo-assembly',
-    name: 'Demo: Pecking Bird Automaton, Wings in Sync',
+  return {
+    id: 'pecking-bird',
+    name: 'Pecking Bird, Wings in Sync',
     groundJointIds: ['joint-A', 'joint-D', 'joint-G2', ...wing2Mechanism.groundJointIds],
     components: {
       crank,
@@ -319,19 +278,27 @@ export function createDemoAssembly(): AssemblyTree {
       [camFollowerJoint.id]: camFollowerJoint,
       ...wing2Mechanism.joints,
     },
-    driver: { theta: 0, omega: 1, isPlaying: true },
+    driver: { theta: 0, omega: speed, isPlaying: true },
     materialDefaults: DEFAULT_MATERIAL,
     kerf: DEFAULT_KERF,
     canvasSize: { width: 300, height: 500 },
     stage: {
       widthMm: 260,
-      depthMm: 220,
+      depthMm: 220 + centerDistance - 60,
       heightMm: 20,
-      originMm: { x: 40, y: -25 },
+      originMm: { x: 40, y: -25 - (centerDistance - 60) / 2 },
       crankJointId: 'joint-A',
       crankHandleLengthMm: 32,
     },
   };
-
-  return assembly;
 }
+
+export const peckingBirdTemplate: AutomatonTemplate = {
+  id: 'pecking-bird',
+  name: 'Pecking Bird',
+  description: 'A crank-rocker four-bar shares its shaft with a reduction gear pair; a cam pecks the head, both wings flap in exact sync via a parallel-motion linkage.',
+  icon: '🐦',
+  mechanisms: ['crank-rocker four-bar', 'gear train', 'cam + follower', 'parallel-motion pair'],
+  paramSchema: [CAM_PROFILE, LIFT, TEETH_OUT, WING_SPAN, SPEED, BODY_COLOR, WING_COLOR],
+  build,
+};

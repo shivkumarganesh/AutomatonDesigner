@@ -48,13 +48,116 @@
   gap: 20px;
 }
 
+.template-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--panel-bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .control-panel h2,
-.validation-panel h2 {
+.validation-panel h2,
+.template-gallery h2,
+.template-params-panel h2 {
   font-size: 15px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-h);
   margin: 0 0 12px;
+}
+
+.template-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.template-card:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.template-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.template-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.template-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.template-description {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.template-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.template-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(192, 132, 252, 0.12);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+
+.control-row-color {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.control-row-color input[type='color'] {
+  width: 36px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.template-params-panel select {
+  background: var(--panel-bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
 }
 
 .control-row {

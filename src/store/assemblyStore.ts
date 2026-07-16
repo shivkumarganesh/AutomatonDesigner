@@ -4,7 +4,8 @@ import { solveAssembly, type SolveResult } from '../kinematics/solver';
 import { computeGrueblerDof, validateGrueblerDof } from '../kinematics/gruebler';
 import { detectPlanarCollisions } from '../kinematics/collision';
 import { validateDriveDirections } from '../kinematics/directionCheck';
-import { createDemoAssembly } from './demoAssembly';
+import { DEFAULT_TEMPLATE_ID, getTemplate, type TemplateParams } from '../templates';
+import { defaultParamsOf } from '../templates/types';
 
 function runValidation(assembly: AssemblyTree, solveResult: SolveResult): ValidationResult {
   const issues = [...validateGrueblerDof(assembly), ...validateDriveDirections(assembly)];
@@ -41,6 +42,8 @@ function runValidation(assembly: AssemblyTree, solveResult: SolveResult): Valida
 }
 
 interface AssemblyState {
+  templateId: string;
+  params: TemplateParams;
   assembly: AssemblyTree;
   solveResult: SolveResult;
   validation: ValidationResult;
@@ -49,8 +52,9 @@ interface AssemblyState {
   stepTheta: (deltaSeconds: number) => void;
   togglePlaying: (playing?: boolean) => void;
   setOmega: (omega: number) => void;
+  selectTemplate: (templateId: string) => void;
+  updateParam: (key: string, value: number | string) => void;
   resetAssembly: () => void;
-  loadAssembly: (assembly: AssemblyTree) => void;
   resolve: () => void;
 }
 
@@ -60,10 +64,17 @@ function solveAndValidate(assembly: AssemblyTree, prevPositions?: Record<string,
   return { solveResult, validation };
 }
 
-const initialAssembly = createDemoAssembly();
+function buildFromTemplate(templateId: string, params: TemplateParams): AssemblyTree {
+  return getTemplate(templateId).build(params);
+}
+
+const initialParams = defaultParamsOf(getTemplate(DEFAULT_TEMPLATE_ID));
+const initialAssembly = buildFromTemplate(DEFAULT_TEMPLATE_ID, initialParams);
 const initialSolve = solveAndValidate(initialAssembly);
 
 export const useAssemblyStore = create<AssemblyState>((set, get) => ({
+  templateId: DEFAULT_TEMPLATE_ID,
+  params: initialParams,
   assembly: initialAssembly,
   solveResult: initialSolve.solveResult,
   validation: initialSolve.validation,
@@ -91,13 +102,27 @@ export const useAssemblyStore = create<AssemblyState>((set, get) => ({
     set({ assembly: { ...assembly, driver: { ...assembly.driver, omega } } });
   },
 
-  resetAssembly: () => {
-    const assembly = createDemoAssembly();
+  selectTemplate: (templateId) => {
+    const params = defaultParamsOf(getTemplate(templateId));
+    const assembly = buildFromTemplate(templateId, params);
     const { solveResult, validation } = solveAndValidate(assembly);
-    set({ assembly, solveResult, validation });
+    set({ templateId, params, assembly, solveResult, validation });
   },
 
-  loadAssembly: (assembly) => {
+  updateParam: (key, value) => {
+    const { templateId, params, assembly: prevAssembly } = get();
+    const nextParams = { ...params, [key]: value };
+    const assembly = buildFromTemplate(templateId, nextParams);
+    // Preserve the current speed/play state across a param tweak so
+    // adjusting, say, wing span doesn't also stop the animation.
+    assembly.driver.isPlaying = prevAssembly.driver.isPlaying;
+    const { solveResult, validation } = solveAndValidate(assembly);
+    set({ params: nextParams, assembly, solveResult, validation });
+  },
+
+  resetAssembly: () => {
+    const { templateId, params } = get();
+    const assembly = buildFromTemplate(templateId, params);
     const { solveResult, validation } = solveAndValidate(assembly);
     set({ assembly, solveResult, validation });
   },

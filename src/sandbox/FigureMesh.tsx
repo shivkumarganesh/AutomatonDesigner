@@ -1,40 +1,46 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { Figure } from '../types/component';
+import type { AssemblyTree } from '../types/assembly';
 import type { Point2D } from '../types/geometry';
 import { add, angleOf, rotate, sub } from '../types/geometry';
+import type { SolveResult } from '../kinematics/solver';
+import { buildWingOutline } from '../geometry/figureShapes';
 import { mmToUnits, toScenePosition } from './scene';
 
 interface FigureMeshProps {
   figure: Figure;
-  positions: Record<string, Point2D>;
+  assembly: AssemblyTree;
+  solveResult: SolveResult;
   highlighted?: boolean;
 }
 
 /**
  * Renders the one part of the design that actually makes it "an automaton"
  * rather than a bare mechanism: a decorative performer glued to whichever
- * joint is driving it, inheriting that joint's already-solved motion.
+ * joint (or, for a spinning disc/pinwheel, gear/cam) is driving it,
+ * inheriting that component's already-solved motion.
  */
-export function FigureMesh({ figure, positions, highlighted }: FigureMeshProps) {
-  const attach = positions[figure.attachJointId];
-  const orientationTarget = figure.orientationJointId ? positions[figure.orientationJointId] : undefined;
+export function FigureMesh({ figure, assembly, solveResult, highlighted }: FigureMeshProps) {
+  const pose = resolveFigurePose(figure, assembly, solveResult);
 
   const wingOutline = useMemo(() => buildWingOutline(figure.scale), [figure.scale]);
   const wingGeometry = useMemo(() => {
-    if (figure.shape !== 'wing') return null;
+    if (figure.shape !== 'wing' && figure.shape !== 'pinwheel') return null;
     const shape = new THREE.Shape();
-    wingOutline.forEach((p, i) => (i === 0 ? shape.moveTo(p.x, p.y) : shape.lineTo(p.x, p.y)));
+    wingOutline.forEach((p, i) => {
+      const sx = mmToUnits(p.x);
+      const sy = mmToUnits(p.y);
+      return i === 0 ? shape.moveTo(sx, sy) : shape.lineTo(sx, sy);
+    });
     shape.closePath();
     const depth = mmToUnits(figure.material.thickness);
-    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 1 });
-    return geo;
+    return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 1 });
   }, [wingOutline, figure.shape, figure.material.thickness]);
 
-  if (!attach) return null;
+  if (!pose) return null;
+  const { world, angle } = pose;
 
-  const angle = orientationTarget ? angleOf(sub(orientationTarget, attach)) : 0;
-  const world = add(attach, rotate(figure.localOffset, angle));
   const position = toScenePosition(world, figure.zIndex);
   const color = highlighted ? '#ff2222' : figure.color ?? '#e07a5f';
 
@@ -76,6 +82,24 @@ export function FigureMesh({ figure, positions, highlighted }: FigureMeshProps) 
     );
   }
 
+  if (figure.shape === 'pinwheel' && wingGeometry) {
+    const bladeCount = 4;
+    const hubRadius = mmToUnits(figure.scale * 0.12);
+    return (
+      <group position={position} rotation={[0, 0, angle]}>
+        {Array.from({ length: bladeCount }, (_, i) => (
+          <mesh key={i} rotation={[0, 0, (i * Math.PI * 2) / bladeCount]} geometry={wingGeometry} castShadow receiveShadow>
+            <meshStandardMaterial color={color} roughness={0.6} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[hubRadius, hubRadius, mmToUnits(figure.material.thickness) * 1.3, 16]} />
+          <meshStandardMaterial color="#1d1d1d" metalness={0.5} roughness={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
   const r = mmToUnits(figure.scale);
   return (
     <mesh position={position} castShadow>
@@ -85,27 +109,34 @@ export function FigureMesh({ figure, positions, highlighted }: FigureMeshProps) 
   );
 }
 
-/** A simple leaf/teardrop wing silhouette, root at the origin pointing +X,
- *  in local mm before extrusion - deliberately a flat laser-cuttable shape
- *  like the rest of the mechanism, not a modeled feather. */
-function buildWingOutline(scale: number): Point2D[] {
-  const len = scale;
-  const w = scale * 0.55;
-  const pts: Point2D[] = [];
-  const segments = 16;
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const x = t * len;
-    const envelope = Math.sin(Math.PI * t) ** 0.6;
-    const y = w * envelope * (1 - t * 0.3);
-    pts.push({ x: mmToUnits(x), y: mmToUnits(y) });
+interface FigurePose {
+  world: Point2D;
+  angle: number;
+}
+
+/**
+ * Two mutually-exclusive attachment modes: ride a Linkage/Follower joint's
+ * position (+ optional second joint for a facing angle), or ride a
+ * Gear/Cam's own solved rotation directly - the latter has no second
+ * moving point to derive an angle from the way a shared pin does.
+ */
+function resolveFigurePose(figure: Figure, assembly: AssemblyTree, solveResult: SolveResult): FigurePose | null {
+  if (figure.attachComponentId) {
+    const component = assembly.components[figure.attachComponentId];
+    if (!component || (component.kind !== 'gear' && component.kind !== 'cam')) return null;
+    const pivot = solveResult.positions[component.pivotJointId];
+    const angle = component.kind === 'gear' ? solveResult.rotations.gears[component.id] : solveResult.rotations.cams[component.id];
+    if (!pivot || angle === undefined) return null;
+    return { world: add(pivot, rotate(figure.localOffset, angle)), angle };
   }
-  for (let i = segments; i >= 0; i--) {
-    const t = i / segments;
-    const x = t * len;
-    const envelope = Math.sin(Math.PI * t) ** 0.6;
-    const y = -w * 0.5 * envelope * (1 - t * 0.3);
-    pts.push({ x: mmToUnits(x), y: mmToUnits(y) });
+
+  if (figure.attachJointId) {
+    const attach = solveResult.positions[figure.attachJointId];
+    if (!attach) return null;
+    const orientationTarget = figure.orientationJointId ? solveResult.positions[figure.orientationJointId] : undefined;
+    const angle = orientationTarget ? angleOf(sub(orientationTarget, attach)) : 0;
+    return { world: add(attach, rotate(figure.localOffset, angle)), angle };
   }
-  return pts;
+
+  return null;
 }

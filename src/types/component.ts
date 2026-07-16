@@ -184,17 +184,27 @@ export interface Follower extends BaseComponentFields {
 // kinematics/collision.ts.
 // ---------------------------------------------------------------------------
 
-export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc';
+export type FigureShapeKind = 'bird-head' | 'wing' | 'sphere' | 'disc' | 'pinwheel';
 
 export interface Figure extends BaseComponentFields {
   kind: 'figure';
   shape: FigureShapeKind;
-  /** The joint whose solved world position this figure rides on every frame. */
-  attachJointId: string;
+  /** The joint whose solved world position this figure rides on every frame.
+   *  Mutually exclusive with `attachComponentId` - use this for anything
+   *  riding a Linkage/Follower pin. */
+  attachJointId?: string;
   /** A second joint used to derive a facing/rotation angle (e.g. the far end
    *  of the link the figure is glued to), so the figure visibly orients
-   *  itself with the mechanism instead of staying axis-aligned. */
+   *  itself with the mechanism instead of staying axis-aligned. Only used
+   *  with `attachJointId`. */
   orientationJointId?: string;
+  /** Rides a Gear/Cam's own solved rotation directly instead of a joint's
+   *  position+orientation pair - for a decorative disc/blade spinning
+   *  coaxially with a gear or cam (e.g. a pinwheel), which has no second
+   *  moving point to derive a facing angle from the way a Linkage pin
+   *  does. World position is that component's pivot. Mutually exclusive
+   *  with `attachJointId`. */
+  attachComponentId?: string;
   /** Offset from the attach joint in the figure's own local frame, mm. */
   localOffset: Point2D;
   /** Overall size, mm. */
